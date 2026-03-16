@@ -60,7 +60,7 @@ sudo bash VPN-over-port-53.sh
 
 ## Step 4 — VPN Inside a Website
 
-[`4_hidden-vpn-that-looks-like-a-website`](../hidden-vpn-that-looks-like-a-website)
+[`4_hidden-vpn-that-looks-like-a-website`](/../../../hidden-vpn-that-looks-like-a-website)
 
 If your carrier intercepts port 53 and iodine is not enough, this is the final escalation. 
 
