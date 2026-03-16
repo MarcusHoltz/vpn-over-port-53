@@ -43,7 +43,7 @@ CoreDNS + iodined running in Docker. Encodes arbitrary traffic as DNS queries so
 
 ## Part 3 — The Full Stack
 
-[`3_wireguard-iodine-crowdsec/`](./3_wireguard-iodine-crowdsec)
+[`3_vpn-over-port-53`](./3_vpn-over-port-53)
 
 One script that installs and puts everything together.
 
