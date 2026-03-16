@@ -32,7 +32,7 @@ The best choice when you just want a quick plain-text config — [easy-wg-quick]
 
 * * *
 
-### Start here
+### --> Start here <--
 
 Open the Holtzweb easy-wg-quick interactive guide in any browser:
 
