@@ -1,0 +1,20 @@
+services:
+  coredns:
+    image: coredns/coredns:latest
+    container_name: coredns
+    network_mode: host
+    volumes:
+      - ./Corefile:/Corefile:ro
+    depends_on:
+      - iodine
+
+
+  iodine:
+    image: spritsail/iodine:latest
+    container_name: iodine
+    network_mode: host
+    privileged: true
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    command: >
+      iodined -f -c -4 -p 5300 -l 127.0.0.1 -n auto -P Your32CharPassword12345678901234 10.53.53.1 t.mydomain.com
