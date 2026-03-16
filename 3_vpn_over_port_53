@@ -1,0 +1,170 @@
+# VPN over port 53
+
+This started as - adding NAT to Iodine, but then several steps later, I figued - why show you all that...
+
+Why not just shove it into a script that does it for you?
+
+> WireGuard VPN server that listens on UDP port 53 to pass through most firewalls (hotels, offices, restrictive ISPs), with a DNS tunnel fallback for carrier environments that intercept port 53, and CrowdSec intrusion prevention watching the exposed port.
+
+
+* * *
+
+## Requirements 
+
+This script was written for Debian 12/13 VPS/VM. Must be run as root.
+
+
+* * *
+
+## Quick Start
+
+```bash
+sudo bash VPN-over-port-53.sh
+```
+
+The script is fully interactive. If a previous install is detected, it skips straight to the post-install menu. Have at it.
+
+
+* * *
+
+## What VPN-over-port-53.sh Installs
+
+- **WireGuard** — VPN server, binds internally on `:51820`
+
+- **nftables** — Firewall; redirects WireGuard packets arriving on `:53` to `:51820` by matching the first 4 bytes of the UDP payload (WireGuard type field). Port 51820 is never open externally.
+
+- **CoreDNS** (Docker) — Listens on `:53`; routes tunnel traffic to iodined and everything else to a decoy resolver
+
+- **iodined** (Docker) — DNS tunnel server on `127.0.0.1:5300`; encodes arbitrary traffic as DNS queries for environments where a carrier intercepts UDP/53
+
+- **CrowdSec** — IPS: custom DNS decoy sensor + parser + scenario bans scanners at the nftables level before they reach any service
+
+- **easy-wg-quick** (Docker, run-once) — Generates WireGuard client configs
+
+
+* * *
+
+### Dependencies
+
+All dependencies installed as well: `nftables`, `wireguard-tools`, `conntrack`, `dnsutils`, `qrencode`, `jq`, `docker-ce`, `docker-compose-plugin`, `crowdsec`, `crowdsec-firewall-bouncer-nftables`
+
+
+* * *
+
+## easy-wg-quick
+
+eash-wg-quick is in charge of generating and maintaining all of the clients. The menu has an option to generate new clients (you will need to delete them).
+
+
+* * *
+
+## DNS Tunnel (iodine)
+
+iodine is a DNS request only tunnel, it's purpose is to provide a direct IP path through environments that only allow real DNS traffic. It provides no encryption.
+
+
+
+### DNS delegation required for iodine
+
+For this to work, you need a nameserver you can query.
+
+Add two records at your registrar:
+
+```
+tunnel.yourdomain.com   IN NS  address.yourdomain.com
+address.yourdomain.com  IN A   SERVER_IP
+```
+
+
+* * *
+
+## CrowdSec
+
+CrowdSec is the bouncer for our DNS port. It watches CoreDNS logs. Any IP that probes the DNS decoy hits 3 queries within 60 seconds triggers a ban enforced by nftables at the kernel level.
+
+```
+CoreDNS stdout -> CrowdSec agent -> LAPI -> nftables bouncer -> DROP set
+```
+
+### Unban yourself on Crowdsec
+
+If you accidentally trigger a ban during testing:
+
+```bash
+sudo cscli decisions delete --ip <your_banned_ip_here>
+```
+
+
+* * *
+
+## Post-Install Menu
+
+After install (or on re-run if already installed), an interactive menu provides:
+
+- DNS delegation instructions for your registrar
+
+- iodine connection credentials and Android app settings
+
+- Per-client WireGuard configs with QR codes (scan with the WireGuard app)
+
+- Add new WireGuard clients live — no service restart required
+
+- CrowdSec reference and command guide
+
+- Optional local Grafana dashboard (accessible over WireGuard only)
+
+- Status, restart, and log commands for all services
+
+
+* * * 
+
+## File Locations
+
+| Path | Purpose |
+|------|---------|
+| `/etc/wireguard/wghub.conf` | WireGuard server config |
+| `/opt/wg/` | WireGuard client configs + easy-wg-quick seed files |
+| `/opt/iodine/docker-compose.yml` | CoreDNS + iodined stack |
+| `/opt/iodine/Corefile` | CoreDNS config |
+| `/etc/nftables.conf` | Firewall rules |
+| `/etc/crowdsec/acquis.d/coredns-decoy.yaml` | CrowdSec log source |
+| `/etc/crowdsec/parsers/s01-parse/coredns-decoy-logs.yaml` | CoreDNS log parser |
+| `/etc/crowdsec/scenarios/dns-decoy-scanner.yaml` | DNS decoy ban scenario |
+| `/etc/crowdsec/bouncers/crowdsec-firewall-bouncer.yaml` | nftables bouncer config |
+| `/opt/crowdsec-grafana/` | Grafana dashboard files (if installed) |
+
+
+
+* * *
+
+## Warnings
+
+### Cellular Carriers / Transparent DNS Proxies
+
+What? How could there be any problem with this great idea we've cooked up and spent time on developing this cool script for.
+
+Well, many carriers intercept all UDP port 53 traffic before it leaves their network and attempt to parse it so they can log and correlate it as raw sellable data. 
+
+> A WireGuard handshake is not a DNS query — many carriers drop or corrupt it.
+
+
+* * *
+
+#### Really? My cell phone provider is modifing traffic
+
+Sure, test it now:
+
+- **Symptom:** Wireguard works on WiFi, fails on cellular.
+
+- **Diagnosis:** `sudo tcpdump -i <iface> -n udp port 53` while connecting from cellular. No packets = carrier blocked it.
+
+- **Fix:** use the iodine DNS tunnel (see post-install menu). iodine encodes traffic as real DNS queries and was designed to survive exactly this.
+
+> What? Iodine is a last resort. Surely, there has got to be a better way.
+
+* * *
+
+## Part 4: XRAY V2Ray HTTP Proxy Tunneling
+
+That's right! There is an alternative! W can move on to the [4_hidden-vpn-that-looks-like-a-website](https://github.com/MarcusHoltz/hidden-vpn-that-looks-like-a-website) example.
+
