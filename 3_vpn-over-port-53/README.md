@@ -9,7 +9,7 @@ Why not just shove it into a script that does it for you?
 
 * * *
 
-![DNS Requests using IodineD to escape](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--iodine-dns-tunnel-requests-escape.jpg "DNS Requests using IodineD to escape")
+![Wireguard masq as a DNS Request to escape](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--wireguard-ontop-dns-decoy.jpg "Wireguard using 53/UDP to escape")
 
 * * *
 
