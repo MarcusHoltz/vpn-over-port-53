@@ -2,7 +2,7 @@
 
 We're going to first deploy Wireguard. This is the best example of a tunnel connection.
 
-![easy-wg-quick a secure vpn tunneling smoothie drink](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/posts/easy-wg-quick-smoothie.png){height=350}
+![easy-wg-quick a secure vpn tunneling smoothie drink](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/posts/easy-wg-quick-smoothie.png)
 
 
 * * * 
