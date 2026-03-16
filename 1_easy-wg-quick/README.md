@@ -11,7 +11,11 @@ This is the best example of a VPN/tunnel connection.
 
 ## wg-easy
 
-The best all-in-one WireGuard solution is probably [wg-easy](https://wg-easy.github.io/wg-easy/latest/examples/tutorials/basic-installation/). It is a single Docker container, has a built-in web UI, and zero extra dependencies.
+The best all-in-one WireGuard solution is probably [wg-easy](https://wg-easy.github.io/wg-easy/latest/examples/tutorials/basic-installation/). 
+
+- Has a built-in web UI
+
+- Everything managed from docker and web UI
 
 > [!TIP]
 > But we're not going to use that ...
@@ -21,11 +25,9 @@ The best all-in-one WireGuard solution is probably [wg-easy](https://wg-easy.git
 
 ## easy-wg-quick
 
-The best choice when you just want a quick plain-text config — [easy-wg-quick](https://github.com/burghardt/easy-wg-quick). It has no daemon, no UI, no database - just some text files.
+The best choice when you just want a quick plain-text config — [easy-wg-quick](https://github.com/burghardt/easy-wg-quick). 
 
-- Config is flat files you can read, diff, and commit
-
-- Adding a new user takes seconds
+- No daemon, no UI, no database - just some text files.
 
 - Works on any Linux host with `wireguard-tools`
 
