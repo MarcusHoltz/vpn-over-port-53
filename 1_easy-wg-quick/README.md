@@ -45,7 +45,7 @@ Or online: [https://blog.holtzweb.com/.../easy-wg-quick-guide.html](https://blog
 
 * * *
 
-## Setup complete
+## Demonstration complete
 
 Make sure you have your wireguard port open, and pointed to the right machine - you should now have a working Wireguard connection!
 
