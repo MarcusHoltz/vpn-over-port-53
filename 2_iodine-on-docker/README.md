@@ -106,5 +106,5 @@ nc  <your_10.55.55.1_iodine_address> 1234 < file.txt
 
 ## After Setup
 
-With the tunnel example down, we can move on to [3_wireguard-iodine-crowdsec](./../../../3_wireguard-iodine-crowdsec) example.
+With the tunnel example down, we can move on to [3_wireguard-iodine-crowdsec](./../3_wireguard-iodine-crowdsec) example.
 
