@@ -36,11 +36,11 @@ The best choice when you just want a quick plain-text config — [easy-wg-quick]
 
 ### --> Start here <--
 
-**Open** the [Holtzweb easy-wg-quick interactive guide](./easy-wg-quick-guide.html) in any browser:
+**Open** the [Holtzweb easy-wg-quick interactive guide](https://blog.holtzweb.com/assets/html/easy-wg-quick-guide.html) in any browser:
 
 - [easy-wg-quick-guide.html](./easy-wg-quick-guide.html)
 
-Or online: [https://blog.holtzweb.com/.../easy-wg-quick-guide.html](https://blog.holtzweb.com/assets/html/easy-wg-quick-guide.html)
+Online at: [https://blog.holtzweb.com/.../easy-wg-quick-guide.html](https://blog.holtzweb.com/assets/html/easy-wg-quick-guide.html)
 
 
 * * *
