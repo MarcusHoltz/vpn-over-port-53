@@ -8,7 +8,7 @@ CoreDNS alongside IodineD within a Dockerized enclave.
 
 * * *
 
-![DNS Requests using IodineD to escape](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--iodine-dns-tunnel-requests-escape "DNS Requests using IodineD to escape")
+![DNS Requests using IodineD to escape](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--iodine-dns-tunnel-requests-escape.jpg "DNS Requests using IodineD to escape")
 
 * * *
 
