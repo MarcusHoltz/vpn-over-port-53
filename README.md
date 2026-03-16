@@ -7,7 +7,7 @@ Three folders, each building on the last — from a plain WireGuard setup to a f
 
 * * *
 
-![DNS Request escapes the local network by using iodine as WireGuard sits flying above](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--iodine-dns-tunnel-requests-escape.jpg "DNS Request Escape with Iodine or Wireguard")
+![DNS Request escapes the local network by using iodine as WireGuard sits flying above](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--opnsense-caddy-dns-vpn-crowdsec-support.jpg "DNS Request Escape with Iodine or Wireguard")
 
 * * *
 
