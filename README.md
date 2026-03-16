@@ -13,7 +13,7 @@ Three folders, each building on the last — from a plain WireGuard setup to a f
 
 ## Part 1 — WireGuard
 
-[`1_easy-wg-quick`](./../../1_easy-wg-quick)
+[`1_easy-wg-quick`](./1_easy-wg-quick)
 
 A basic WireGuard server using easy-wg-quick. No UI, no daemon — just flat config files you can read and commit.
 
@@ -28,7 +28,7 @@ A basic WireGuard server using easy-wg-quick. No UI, no daemon — just flat con
 
 ## Part 2 — DNS Tunnel
 
-[`2_iodine-on-docker`](./../../2_iodine-on-docker)
+[`2_iodine-on-docker`](./2_iodine-on-docker)
 
 CoreDNS + iodined running in Docker. Encodes arbitrary traffic as DNS queries so it passes through networks that block everything else.
 
@@ -43,7 +43,7 @@ CoreDNS + iodined running in Docker. Encodes arbitrary traffic as DNS queries so
 
 ## Part 3 — The Full Stack
 
-[`3_wireguard-iodine-crowdsec/`](./../../3_wireguard-iodine-crowdsec)
+[`3_wireguard-iodine-crowdsec/`](./3_wireguard-iodine-crowdsec)
 
 One script that installs and puts everything together.
 
