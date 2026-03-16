@@ -34,16 +34,18 @@ The best choice when you just want a quick plain-text config — [easy-wg-quick]
 
 ### --> Start here <--
 
-Open the Holtzweb easy-wg-quick interactive guide in any browser:
+**Open** the [Holtzweb easy-wg-quick interactive guide](./easy-wg-quick-guide.html) in any browser:
 
-[easy-wg-quick-guide.html](./easy-wg-quick-guide.html)
+- [easy-wg-quick-guide.html](./easy-wg-quick-guide.html)
 
 Or online: [https://blog.holtzweb.com/.../easy-wg-quick-guide.html](https://blog.holtzweb.com/assets/html/easy-wg-quick-guide.html)
 
 
+* * *
+
 ## Setup complete
 
-Make sure you have all your ports open, and pointed to the right machine - you should now have a working Wireguard connection!
+Make sure you have your wireguard port open, and pointed to the right machine - you should now have a working Wireguard connection!
 
 
 * * *
