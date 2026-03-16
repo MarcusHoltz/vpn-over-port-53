@@ -55,5 +55,5 @@ Make sure you have your wireguard port open, and pointed to the right machine - 
 
 # Part 2: CoreDNS carrying IodineD in Docker
 
-With the tunnel example down, we can move on to [2_docker-iodine](../2_docker-iodine) example.
+With the tunnel example down, we can move on to [2_iodine-on-docker](./../../2_iodine-on-docker) example.
 
