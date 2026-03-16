@@ -108,11 +108,3 @@ nc  <your_10.55.55.1_iodine_address> 1234 < file.txt
 
 With the tunnel example down, we can move on to [3_wireguard-iodine-crowdsec](./../../../3_wireguard-iodine-crowdsec) example.
 
-
-# Unbound DNS serving IodineD in Docker with NFTables on the system
-
-
-
-
-
-
