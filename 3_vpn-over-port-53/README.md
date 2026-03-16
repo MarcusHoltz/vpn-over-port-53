@@ -9,6 +9,10 @@ Why not just shove it into a script that does it for you?
 
 * * *
 
+![DNS Requests using IodineD to escape](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--iodine-dns-tunnel-requests-escape.jpg "DNS Requests using IodineD to escape")
+
+* * *
+
 ## Requirements 
 
 This script was written for Debian 12/13 VPS/VM. Must be run as root.
