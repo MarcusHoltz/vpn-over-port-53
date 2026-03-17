@@ -2,7 +2,9 @@
 
 WireGuard VPN disguised as DNS traffic, iodine DNS tunnel fallback, and CrowdSec DNS decoy as a fail2ban.
 
-Three folders, each building on the last — from a plain WireGuard setup to a fully disguised VPN that survives networks that block everything except DNS.
+Several folders, each demonstrating part of the final script. The write-up that goes along with this repository can be found at: 
+
+> [https://blog.holtzweb.com](https://blog.holtzweb.com)
 
 
 * * *
