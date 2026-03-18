@@ -334,7 +334,34 @@ SECTION
     -f   = stay in foreground
 
     Once connected, tunnel IP is ${TUNNEL_IP}
-    SSH SOCKS proxy: ssh -D 1080 -C -N user@${TUNNEL_IP}
+
+  ── Linux: DNS configuration (required) ─────────────────────
+
+    iodine does not configure DNS automatically.
+    The server's CoreDNS is a decoy -- do NOT use it for DNS.
+    Point DNS directly at an external resolver instead.
+    The iodine subnet is already NAT'd to the internet, so
+    external resolvers are reachable through the tunnel.
+
+    Temporary (lost on reboot):
+      echo 'nameserver ${WG_DNS}' | sudo tee /etc/resolv.conf
+
+    Or use any public resolver: 1.1.1.1, 8.8.8.8, etc.
+
+  ── Linux: route all traffic through iodine ─────────────────
+
+    iodine only routes the tunnel subnet by default.
+    To route all internet traffic through the tunnel:
+
+      sudo ip route add default via ${TUNNEL_IP} metric 10
+
+    Remove when done:
+      sudo ip route del default via ${TUNNEL_IP}
+
+  ── SSH SOCKS proxy (alternative to full routing) ────────────
+
+    ssh -D 1080 -C -N user@${TUNNEL_IP}
+    Then set browser proxy: SOCKS5 127.0.0.1:1080
 
   ── Android: AndIodine app ───────────────────────────────────
 
@@ -354,7 +381,9 @@ SECTION
       Raw Mode            DISABLE
       Default Route       ENABLE
 
-    Once connected, all phone traffic routes through the tunnel.
+    With Default Route ENABLE, all traffic routes through the
+    tunnel.  Android routes DNS to 45.11.45.11 directly via
+    the tunnel -- no extra DNS config needed on Android.
 
   ── IMPORTANT ────────────────────────────────────────────────
 
@@ -1946,7 +1975,7 @@ show_install_menu() {
                         clear
                         echo ""
                         echo "  ╔══════════════════════════════════════════════════════════╗"
-                        echo "  ║   !! WARNING: Port 123 (NTP) has severe limitations !!   ║"
+                        echo "  ║   !! WARNING: Port 123 (NTP) has severe limitations !!  ║"
                         echo "  ╚══════════════════════════════════════════════════════════╝"
                         echo ""
                         echo "  Before selecting port 123, you must understand the following."
@@ -2417,6 +2446,22 @@ mkdir -p "$GENDIR/iodine" "$GENDIR/wg"
 
 # ── Corefile ──────────────────────────────────────────────────────────────────
 # {{ .Name }} is CoreDNS template syntax, not shell -- passes through heredoc.
+#
+# Two server blocks:
+#
+#   1. ${IODINE_DOMAIN}: forwards to iodined on 127.0.0.1:5300.
+#      Handles the iodine tunnel handshake protocol -- must never be altered.
+#
+#   2. . (catch-all): decoy zone, public-facing.  Logs all queries for
+#      CrowdSec, blocks type ANY (anti-amplification), and returns
+#      93.184.216.34 for everything to look like a broken public resolver.
+#
+# DNS for iodine clients: do NOT bind a third zone to ${TUNNEL_IP}.
+# CoreDNS would try to bind that IP at startup before iodined has created
+# the tun interface -- the bind fails, CoreDNS exits, and the iodine handshake
+# zone (block 1) never comes up.  Iodine clients instead use an external
+# resolver directly (e.g. 45.11.45.11); this works because the nftables
+# masquerade rule already NATs iodine subnet traffic to the internet.
 cat > "$GENDIR/iodine/Corefile" << COREFILE_EOF
 ${IODINE_DOMAIN} {
     forward . 127.0.0.1:5300
