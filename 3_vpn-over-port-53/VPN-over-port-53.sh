@@ -200,6 +200,9 @@ load_existing_config() {
             local base name
             base="$(basename "$f" .conf)"
             name="${base#wgclient_}"
+            # Skip _ntp variants -- they are port-123 copies of primary configs.
+            # The menu handles them separately via a second loop over *_ntp.conf.
+            [[ "$name" == *_ntp ]] && continue
             names+=("$name")
         done
         if [ "${#names[@]}" -gt 0 ]; then
@@ -217,6 +220,15 @@ load_existing_config() {
         WG_DNS="(not installed)"
         WG_CLIENTS_RAW=""
     fi
+
+    # Detect which external ports are active from the deployed nftables.conf.
+    # Used by build_and_show_menu and action_add_wireguard_client.
+    WG_USE_PORT_53=false
+    WG_USE_PORT_123=false
+    grep -q 'udp dport 53[[:space:]].*redirect to :51820' /etc/nftables.conf 2>/dev/null \
+        && WG_USE_PORT_53=true
+    grep -q 'udp dport 123[[:space:]].*redirect to :51820' /etc/nftables.conf 2>/dev/null \
+        && WG_USE_PORT_123=true
 
     if [ "$errors" -gt 0 ]; then
         echo ""
@@ -272,8 +284,14 @@ build_and_show_menu() {
     # ── Detect what is installed on this node at menu-build time ─────────────
     local MENU_HAS_WG="false"
     local MENU_HAS_CS="false"
+    local MENU_HAS_GRAFANA="false"
+    local MENU_HAS_WEBUI="false"
     [ -f /etc/wireguard/wghub.conf ]          && MENU_HAS_WG="true"
     command -v cscli >/dev/null 2>&1           && MENU_HAS_CS="true"
+    [ "$(docker inspect -f '{{.State.Running}}' crowdsec-grafana  2>/dev/null)" = "true" ] \
+        && MENU_HAS_GRAFANA="true"
+    [ "$(docker inspect -f '{{.State.Running}}' crowdsec-web-ui   2>/dev/null)" = "true" ] \
+        && MENU_HAS_WEBUI="true"
 
     # ── 1. DNS delegation ─────────────────────────────────────────────────────
     cat > "$MENUDIR/01_dns_delegation.txt" << SECTION
@@ -404,6 +422,10 @@ SECTION
                 echo "    # or copy to /etc/wireguard/${name}.conf and:"
                 echo "    sudo wg-quick up ${name}"
                 echo ""
+                echo "  Linux -- if you see 'resolvconf: command not found':"
+                echo "    sudo apt install resolvconf"
+                echo "    sudo wg-quick up $conf"
+                echo ""
                 echo "  Windows:"
                 echo "    Import tunnel from file: $conf"
                 echo ""
@@ -422,6 +444,86 @@ SECTION
                 echo "  │                                                         │"
                 echo "  │  See 'cellular warning' in this menu for full details.  │"
                 echo "  └─────────────────────────────────────────────────────────┘"
+            } > "$OUTFILE"
+
+            CLIENT_IDX=$((CLIENT_IDX + 1))
+        done
+    fi
+
+    # ── 3b. Port 123 (_ntp) WireGuard client configs ─────────────────────────
+    # Only added when both ports are configured. Each _ntp config is a copy of
+    # the primary with Endpoint patched to port 123.
+    if [ "$MENU_HAS_WG" = "true" ] && $WG_USE_PORT_53 && $WG_USE_PORT_123 \
+            && [ -n "$WG_CLIENTS_RAW" ]; then
+        IFS=',' read -ra _ntp_names <<< "$WG_CLIENTS_RAW"
+        for raw_name in "${_ntp_names[@]}"; do
+            local name
+            name="$(echo "$raw_name" | tr -d '[:space:]')"
+            [ -z "$name" ] && continue
+            local conf="/opt/wg/wgclient_${name}_ntp.conf"
+            [ -f "$conf" ] || continue
+
+            local PADDED OUTFILE
+            PADDED="$(printf '%02d' $CLIENT_IDX)"
+            OUTFILE="$MENUDIR/${PADDED}_wg_${name}_ntp.txt"
+
+            {
+                echo "================================================================"
+                echo "  WireGuard Client: ${name}  [port 123 / NTP bypass]"
+                echo "================================================================"
+                echo ""
+                echo "  Use this config when port 53 is intercepted by your carrier"
+                echo "  or network."
+                echo ""
+                echo "  !! THROUGHPUT WARNING: port 123 is rate-capped by some ISPs !!"
+                echo ""
+                echo "  Some carriers rate-limit UDP/123 to ~50 Kbps / ~4-5 packets/sec."
+                echo "  This is a hard ceiling imposed upstream -- the server cannot raise"
+                echo "  it.  50 Kbps is dial-up modem speed.  Expect extremely slow web,"
+                echo "  unusable video, and marginally usable SSH."
+                echo ""
+                echo "  The other ISP threat on this port is DPI (Deep Packet Inspection):"
+                echo "  carriers that inspect payloads confirm NTP's fixed 48-byte packet"
+                echo "  size and structure.  WireGuard packets do not match.  If port 123"
+                echo "  connects but immediately drops, DPI is the likely cause.  There is"
+                echo "  no server-side workaround for DPI -- switch to iodine instead."
+                echo ""
+                echo "  Config file: $conf"
+                echo "  Endpoint:    $(grep Endpoint "$conf" | awk '{print $3}')"
+                echo ""
+                echo "  ── Config contents ─────────────────────────────────────────"
+                echo ""
+                cat "$conf"
+                echo ""
+                echo "  ── QR Code (scan with WireGuard app) ───────────────────────"
+                echo ""
+                if command -v qrencode >/dev/null 2>&1; then
+                    qrencode -t ansiutf8 < "$conf" 2>/dev/null || echo "  (qrencode failed)"
+                else
+                    echo "  (qrencode not installed -- sudo apt install qrencode)"
+                fi
+                echo ""
+                echo "  ── How to connect ──────────────────────────────────────────"
+                echo ""
+                echo "  Android / iOS:"
+                echo "    1. Open WireGuard app"
+                echo "    2. Tap + -> Scan QR code (this code, not the port-53 one)"
+                echo "    3. Point camera at the QR code above"
+                echo "    4. Activate the tunnel"
+                echo ""
+                echo "  Linux:"
+                echo "    sudo wg-quick up $conf"
+                echo ""
+                echo "  Windows:"
+                echo "    Import tunnel from file: $conf"
+                echo ""
+                echo "  ── When to use port 123 vs port 53 ─────────────────────────"
+                echo ""
+                echo "  Port 53 works:    hotels, offices, most restrictive WiFi"
+                echo "  Port 123 works:   carriers that intercept/redirect UDP :53"
+                echo ""
+                echo "  Test port 53 first. If it fails on cellular but works on"
+                echo "  WiFi, switch to this port-123 config."
             } > "$OUTFILE"
 
             CLIENT_IDX=$((CLIENT_IDX + 1))
@@ -463,13 +565,37 @@ SECTION
         echo "    cd /opt/iodine && docker compose logs -f iodine"
         echo ""
         if [ "$MENU_HAS_CS" = "true" ]; then
-            echo "  ── Grafana / Prometheus (if dashboard installed) ────────────"
+            # Show live dashboard access URLs for whichever is currently running.
+            local _wg_ip="${WG_NETWORK%.*}.1"
+            if [ "$MENU_HAS_GRAFANA" = "true" ] || [ "$MENU_HAS_WEBUI" = "true" ]; then
+                echo "  ── Dashboard access (VPN required) ──────────────────────────"
+                echo ""
+                if [ "$MENU_HAS_GRAFANA" = "true" ]; then
+                    echo "  Grafana:  http://${_wg_ip}:3000    (WireGuard)"
+                    echo "            http://${TUNNEL_IP}:3000    (iodine)"
+                fi
+                if [ "$MENU_HAS_WEBUI" = "true" ]; then
+                    echo "  Web UI:   http://${_wg_ip}:3000    (WireGuard)"
+                    echo "            http://${TUNNEL_IP}:3000    (iodine)"
+                fi
+                echo ""
+            fi
+            echo "  ── Dashboard containers ─────────────────────────────────────"
             echo ""
-            echo "    docker ps | grep -E 'crowdsec-prometheus|crowdsec-grafana'"
-            echo "    docker start crowdsec-prometheus crowdsec-grafana"
-            echo "    docker stop  crowdsec-prometheus crowdsec-grafana"
-            echo "    docker logs  crowdsec-prometheus"
-            echo "    docker logs  crowdsec-grafana"
+            if [ "$MENU_HAS_GRAFANA" = "true" ]; then
+                echo "    docker stop  crowdsec-prometheus crowdsec-grafana"
+                echo "    docker start crowdsec-prometheus crowdsec-grafana"
+                echo "    docker logs  crowdsec-prometheus"
+                echo "    docker logs  crowdsec-grafana"
+                echo "    docker rm -f crowdsec-prometheus crowdsec-grafana"
+            elif [ "$MENU_HAS_WEBUI" = "true" ]; then
+                echo "    docker stop  crowdsec-web-ui"
+                echo "    docker start crowdsec-web-ui"
+                echo "    docker logs  crowdsec-web-ui"
+                echo "    docker rm -f crowdsec-web-ui"
+            else
+                echo "    No dashboard running. Use '* install dashboard' from this menu."
+            fi
             echo ""
         fi
         echo "  ── Conntrack (active tunnels) ──────────────────────────────"
@@ -543,7 +669,31 @@ SECTION
     If you see NOTHING when you try to connect: carrier blocked it.
     If you see garbled replies going back: carrier is proxying it.
 
-  ── Workaround: tunnel WireGuard through iodine ─────────────
+  ── Workaround option 1: switch to port 123 (NTP) ───────────
+
+    If this server was configured with WireGuard on port 123,
+    use the port-123 client config instead of the port-53 one.
+
+    Port 123 is used by NTP (Network Time Protocol). Carrier DNS
+    proxies do not touch it, which solves the port-53 interception
+    problem.  However, port 123 has two other ISP threat models:
+
+    1. Rate limiting: some carriers cap UDP/123 to ~50 Kbps / ~5 PPS.
+       This is a hard ceiling imposed upstream -- the server cannot raise
+       it.  50 Kbps is dial-up speed.  WireGuard will connect but the
+       experience will be extremely slow for anything beyond SSH.
+
+    2. DPI fingerprinting: carriers that do payload inspection check
+       that traffic on port 123 matches NTP's fixed 48-byte packet
+       size and message structure.  WireGuard packets do not match.
+       If port 123 connects briefly then dies, DPI is the likely cause.
+       There is no server-side workaround for DPI.
+
+    Look for a "port 123 / NTP bypass" entry in this menu for the
+    config and QR code. If it is not listed, port 123 was not
+    selected at install time.
+
+  ── Workaround option 2: tunnel WireGuard through iodine ────
 
     iodine encodes traffic as real DNS queries -- it was built
     to survive exactly this. Once iodine is connected, you have
@@ -568,7 +718,14 @@ SECTION
     block everything except ports 80, 443, and 53.
     Port 53 gets through almost everywhere -- except carriers
     who own the DNS infrastructure themselves.
-    It is a trade-off: maximum firewall bypass, some carrier risk.
+
+    Port 123 avoids carrier DNS proxying.  The trade-offs are:
+      - Rate cap (~50 Kbps / ~5 PPS) on carriers that police UDP/123.
+        This is a hard ISP ceiling.  There is no server-side workaround.
+      - DPI fingerprinting on carriers that inspect NTP payload size and
+        structure.  Cannot be worked around server-side.
+
+    Port 53 + port 123 together cover the widest range of networks.
 SECTION
 
     # ── 6. CrowdSec about + commands: only if CrowdSec is installed ───────────
@@ -585,13 +742,13 @@ SECTION
   and bans the source IP -- across every machine in your network
   simultaneously.
 
-  On this server, the DNS decoy on port 53 is the primary sensor.
-  Any IP that probes your DNS (this server is not a public resolver)
-  is treated as a scanner and banned automatically.
+  On this server, decoy sensors on the open ports are the
+  primary detection mechanism. Any IP that probes a port it
+  should not be probing is treated as a scanner and banned.
 
   ── How the pieces fit together ─────────────────────────────
 
-    Sensor (CoreDNS decoy)
+    Sensor (CoreDNS decoy -- port 53)
       Every DNS query that hits the catch-all zone is logged.
       CrowdSec reads those logs in real-time via the Docker
       datasource.
@@ -621,6 +778,31 @@ SECTION
     Sensor  ->  Parser  ->  Scenario  ->  LAPI  ->  Bouncer
     (logs)      (events)    (decisions)   (brain)   (firewall)
 
+SECTION
+
+        # Insert port 123 sensor description when active.
+        if $WG_USE_PORT_123; then
+            cat >> "$MENUDIR/93_crowdsec_about.txt" << 'SECTION'
+    Sensor (nftables CROWDSEC_DROP -- port 123)
+      Non-WireGuard UDP:123 packets are not DNAT'd in prerouting.
+      They reach the input chain, are dropped, and the CROWDSEC_DROP
+      nftables log rule writes them to kern.log.
+
+    Parser (custom/ntp-probe-enrich -- s02-enrich)
+      crowdsecurity/iptables-logs (s01-parse) already processes all
+      CROWDSEC_DROP kernel log lines, extracts the source IP from
+      SRC=, and promotes the event to s02-enrich via next_stage.
+      This enricher runs in s02-enrich and tags events where the
+      already-parsed message contains DPT=123 as log_type=ntp_probe.
+
+    Scenario (custom/ntp-probe-scanner)
+      Same leaky-bucket as the DNS decoy: 3 probes within 60s = ban.
+      Uses evt.Meta.source_ip which iptables-logs already set.
+
+SECTION
+        fi
+
+        cat >> "$MENUDIR/93_crowdsec_about.txt" << 'SECTION'
   ── Daily monitoring (three commands cover most needs) ───────
 
     sudo cscli decisions list     -- who is currently banned
@@ -632,6 +814,7 @@ SECTION
     sudo cscli decisions list
     sudo cscli decisions list --origin crowdsec --limit 20
     sudo cscli alerts list --scenario custom/dns-decoy-scanner
+    sudo cscli alerts list --scenario custom/ntp-probe-scanner
 
   ── Manually ban or unban an IP ─────────────────────────────
 
@@ -679,8 +862,14 @@ SECTION
 
   ── Zero-tolerance mode (ban on first probe) ─────────────────
 
-    Edit /etc/crowdsec/scenarios/dns-decoy-scanner.yaml
-    Set: type: trigger  (remove leakspeed and capacity lines)
+    For the DNS decoy (port 53):
+      Edit /etc/crowdsec/scenarios/dns-decoy-scanner.yaml
+      Set: type: trigger  (remove leakspeed and capacity lines)
+
+    For the port 123 probe scanner (if port 123 active):
+      Edit /etc/crowdsec/scenarios/ntp-probe-scanner.yaml
+      Set: type: trigger  (remove leakspeed and capacity lines)
+
     sudo systemctl restart crowdsec
 SECTION
 
@@ -835,6 +1024,13 @@ SECTION
             || { echo "  ERROR: config file not created."; return; }
         chmod 600 "/opt/wg/wgclient_${newname}.conf"
 
+        # easy-wg-quick wrote the new peer into /opt/wg/wghub.conf.
+        # /etc/wireguard/wghub.conf is what wg-quick@wghub runs from and what
+        # wg syncconf reads below.  Without this copy the new peer is invisible
+        # to the live WireGuard instance and lost on every restart.
+        install -m 600 /opt/wg/wghub.conf /etc/wireguard/wghub.conf \
+            || { echo "  ERROR: could not update /etc/wireguard/wghub.conf"; return; }
+
         # Reload WireGuard live -- no downtime, no reconnect needed for existing peers
         echo "  Reloading WireGuard..."
         wg syncconf wghub <(wg-quick strip /etc/wireguard/wghub.conf) \
@@ -857,6 +1053,16 @@ SECTION
         echo "  Scan the QR code with the WireGuard app, or copy the config file."
         echo "  New peer is already live on the server -- no restart needed."
         echo ""
+
+        # When both ports are active, create the port-123 variant immediately.
+        if $WG_USE_PORT_53 && $WG_USE_PORT_123; then
+            local _new_ntp="/opt/wg/wgclient_${newname}_ntp.conf"
+            sed "s/Endpoint = ${SERVER_IP}:53/Endpoint = ${SERVER_IP}:123/" \
+                "/opt/wg/wgclient_${newname}.conf" > "$_new_ntp"
+            chmod 600 "$_new_ntp"
+            echo "  Created wgclient_${newname}_ntp.conf (Endpoint: ${SERVER_IP}:123)"
+            echo "  Both configs are ready -- see port 123 entry in this menu."
+        fi
 
         # Rebuild the per-client menu page so the new client appears
         local newconf="/opt/wg/wgclient_${newname}.conf"
@@ -894,6 +1100,10 @@ SECTION
             echo "  Linux:"
             echo "    sudo wg-quick up $newconf"
             echo ""
+            echo "  Linux -- if you see 'resolvconf: command not found':"
+            echo "    sudo apt install resolvconf"
+            echo "    sudo wg-quick up $newconf"
+            echo ""
             echo "  Windows:"
             echo "    Import tunnel from file: $newconf"
             echo ""
@@ -914,6 +1124,49 @@ SECTION
             echo "  └─────────────────────────────────────────────────────────┘"
         } > "$newfile"
         CLIENT_IDX=$((CLIENT_IDX + 1))
+
+        # Rebuild the port-123 menu page for the new client when both ports active.
+        if $WG_USE_PORT_53 && $WG_USE_PORT_123; then
+            local newntp_conf="/opt/wg/wgclient_${newname}_ntp.conf"
+            if [ -f "$newntp_conf" ]; then
+                local newntp_padded newntp_file
+                newntp_padded="$(printf '%02d' "$CLIENT_IDX")"
+                newntp_file="$MENUDIR/${newntp_padded}_wg_${newname}_ntp.txt"
+                {
+                    echo "================================================================"
+                    echo "  WireGuard Client: ${newname}  [port 123 / NTP bypass]"
+                    echo "================================================================"
+                    echo ""
+                    echo "  Use this config when port 53 is intercepted by your carrier"
+                    echo "  or network. Port 123 (NTP) is usually passed through without"
+                    echo "  inspection and works where port 53 does not."
+                    echo ""
+                    echo "  Config file: $newntp_conf"
+                    echo "  Endpoint:    $(grep Endpoint "$newntp_conf" | awk '{print $3}')"
+                    echo ""
+                    echo "  ── Config contents ─────────────────────────────────────────"
+                    echo ""
+                    cat "$newntp_conf"
+                    echo ""
+                    echo "  ── QR Code (scan with WireGuard app) ───────────────────────"
+                    echo ""
+                    if command -v qrencode >/dev/null 2>&1; then
+                        qrencode -t ansiutf8 < "$newntp_conf" 2>/dev/null || echo "  (qrencode failed)"
+                    else
+                        echo "  (qrencode not installed)"
+                    fi
+                    echo ""
+                    echo "  ── When to use port 123 vs port 53 ─────────────────────────"
+                    echo ""
+                    echo "  Port 53 works:    hotels, offices, most restrictive WiFi"
+                    echo "  Port 123 works:   carriers that intercept/redirect UDP :53"
+                    echo ""
+                    echo "  Test port 53 first. If it fails on cellular but works on"
+                    echo "  WiFi, switch to this port-123 config."
+                } > "$newntp_file"
+                CLIENT_IDX=$((CLIENT_IDX + 1))
+            fi
+        fi
     }
 
     action_crowdsec_live() {
@@ -1015,7 +1268,10 @@ SECTION
         echo ""
     }
 
-    action_install_dashboard() {
+    # ── _install_grafana_dashboard ────────────────────────────────────────────
+    # Called by action_install_dashboard when the user selects Grafana.
+    # Not auto-dispatched by the menu loop (no action_ prefix).
+    _install_grafana_dashboard() {
         clear
         local WG_SERVER_IP="${WG_NETWORK%.*}.1"
         local GRAFANA_DIR="/opt/crowdsec-grafana"
@@ -1262,6 +1518,304 @@ ENDYAML
         echo ""
     }
 
+    # ── _install_crowdsec_webui ───────────────────────────────────────────────
+    # Called by action_install_dashboard when the user selects Web UI.
+    # Not auto-dispatched by the menu loop (no action_ prefix).
+    _install_crowdsec_webui() {
+        clear
+        local WEBUI_DATA="/opt/crowdsec-webui/data"
+        local WEBUI_CONTAINER="crowdsec-web-ui"
+
+        echo ""
+        echo "  ╔══════════════════════════════════════════════════╗"
+        echo "  ║   CrowdSec Web UI -- Local Install               ║"
+        echo "  ╚══════════════════════════════════════════════════╝"
+        echo ""
+        echo "  A modern React/Bun dashboard for CrowdSec."
+        echo "  Manages alerts and decisions directly via the LAPI."
+        echo "  No Prometheus or Grafana required."
+        echo ""
+        echo "  Source: https://github.com/TheDuffman85/crowdsec-web-ui"
+        echo ""
+        echo "  SECURITY: This UI has no built-in authentication."
+        echo "  It is accessible only over WireGuard or iodine (VPN-only"
+        echo "  port rule in nftables). Do not expose it publicly."
+        echo ""
+
+        # ── Prerequisites ─────────────────────────────────────────────────────
+        command -v docker >/dev/null 2>&1 \
+            || { echo "  ERROR: docker not found."; return; }
+        command -v cscli >/dev/null 2>&1 \
+            || { echo "  ERROR: cscli not found -- CrowdSec may not be installed."; return; }
+        systemctl is-active crowdsec >/dev/null 2>&1 \
+            || { echo "  ERROR: crowdsec not running -- start it first."; return; }
+
+        # ── Detect LAPI URL from deployed credentials ──────────────────────────
+        # Same detection pattern used by action_crowdsec_live.
+        # For local mode this is http://127.0.0.1:8080.
+        # For remote mode this is whatever was configured at install time.
+        local lapi_url
+        lapi_url="$(grep '^url:' /etc/crowdsec/local_api_credentials.yaml 2>/dev/null \
+            | awk '{print $2}' | tr -d '[:space:]' || true)"
+        if [ -z "$lapi_url" ]; then
+            lapi_url="http://127.0.0.1:8080"
+            echo "  NOTE: Could not read LAPI URL from local_api_credentials.yaml."
+            echo "        Defaulting to http://127.0.0.1:8080"
+        fi
+        echo "  LAPI URL: $lapi_url"
+        echo ""
+
+        # ── Port 3000 conflict check ───────────────────────────────────────────
+        # The web UI binds port 3000. The Grafana stack (action_install_dashboard)
+        # also uses port 3000. They cannot coexist on the same port.
+        # If Grafana containers exist, warn and offer to stop them.
+        local grafana_running=false
+        docker inspect crowdsec-grafana >/dev/null 2>&1 \
+            && [ "$(docker inspect -f '{{.State.Running}}' crowdsec-grafana 2>/dev/null)" = "true" ] \
+            && grafana_running=true
+
+        if $grafana_running; then
+            echo "  WARNING: crowdsec-grafana is currently running on port 3000."
+            echo "           The Web UI also uses port 3000. Both cannot run at once."
+            echo ""
+            echo "    s) Stop Grafana and continue installing Web UI"
+            echo "    q) Cancel"
+            echo ""
+            read -rp "  Choice: " _gf_ch || true
+            case "${_gf_ch:-q}" in
+                s)
+                    docker stop crowdsec-grafana 2>/dev/null || true
+                    echo "  crowdsec-grafana stopped."
+                    ;;
+                *)
+                    echo "  Cancelled."; return ;;
+            esac
+            echo ""
+        fi
+
+        # ── Existing web UI container check ───────────────────────────────────
+        if docker inspect "$WEBUI_CONTAINER" >/dev/null 2>&1; then
+            local st
+            st="$(docker inspect -f '{{.State.Status}}' "$WEBUI_CONTAINER" 2>/dev/null)"
+            echo "  Container $WEBUI_CONTAINER already exists (state: $st)."
+            echo ""
+            echo "    r) Start/restart existing container"
+            echo "    R) Remove and reinstall (clean slate -- data volume preserved)"
+            echo "    q) Cancel"
+            echo ""
+            read -rp "  Choice: " _wu_ch || true
+            case "${_wu_ch:-q}" in
+                r)
+                    docker start "$WEBUI_CONTAINER" 2>/dev/null || true
+                    echo "  Started."
+                    echo "  Connect VPN then open: http://${WG_NETWORK%.*}.1:3000"
+                    return ;;
+                R)
+                    docker rm -f "$WEBUI_CONTAINER" 2>/dev/null || true
+                    echo "  Removed. Reinstalling..." ;;
+                *)
+                    echo "  Cancelled."; return ;;
+            esac
+            echo ""
+        fi
+
+        # ── Machine account registration ──────────────────────────────────────
+        # The web UI authenticates against the LAPI as a "machine" (watcher).
+        # We register it here with a generated password.
+        # -f /dev/null: do NOT write a local_api_credentials.yaml file.
+        #   This is critical -- cscli machines add would otherwise overwrite
+        #   /etc/crowdsec/local_api_credentials.yaml, breaking the agent's own
+        #   LAPI connection.
+        # If the machine already exists, cscli exits non-zero but that is safe
+        # to ignore -- the existing registration is still valid.
+        echo "  ── Machine account setup ──────────────────────────────────"
+        echo ""
+        local WEBUI_PASS
+        WEBUI_PASS="$(openssl rand -hex 32)"
+        echo "  Generated web UI machine password."
+
+        if cscli machines list 2>/dev/null | grep -q 'crowdsec-web-ui'; then
+            echo "  Machine 'crowdsec-web-ui' already registered."
+            echo "  A new password will be set. If this container was previously"
+            echo "  running with a different password, it will be replaced."
+            # Update password by re-adding -- cscli machines add is idempotent
+            # when the machine already exists; it updates the password.
+            cscli machines add crowdsec-web-ui --password "$WEBUI_PASS" -f /dev/null 2>/dev/null \
+                || { echo "  ERROR: Failed to update machine password."; return; }
+            echo "  [OK]   Machine password updated."
+        else
+            cscli machines add crowdsec-web-ui --password "$WEBUI_PASS" -f /dev/null 2>/dev/null \
+                || { echo "  ERROR: Failed to register machine with LAPI."; return; }
+            echo "  [OK]   Machine 'crowdsec-web-ui' registered with LAPI."
+        fi
+        echo ""
+
+        # ── Pull image ────────────────────────────────────────────────────────
+        echo "  Pulling image ghcr.io/theduffman85/crowdsec-web-ui:latest ..."
+        docker pull ghcr.io/theduffman85/crowdsec-web-ui:latest \
+            || { echo "  ERROR: image pull failed."; return; }
+        echo "  [OK]   Image ready."
+
+        # ── Data directory ────────────────────────────────────────────────────
+        # Pre-create the data directory owned by UID/GID 1000 -- the bun user
+        # inside the container. The entrypoint runs a chown on /app/data; if the
+        # directory is already owned by 1000:1000 that chown is a no-op and the
+        # container starts cleanly. If it is root:root the chown fails (CRITICAL
+        # FAILURE) and the container restart-loops.
+        mkdir -p "$WEBUI_DATA"
+        chown 1000:1000 "$WEBUI_DATA"
+        echo "  [OK]   Data directory: $WEBUI_DATA (owned 1000:1000 for bun user)"
+
+        # ── Pull image ────────────────────────────────────────────────────────
+        echo "  Pulling image ghcr.io/theduffman85/crowdsec-web-ui:latest ..."
+        docker pull ghcr.io/theduffman85/crowdsec-web-ui:latest \
+            || { echo "  ERROR: image pull failed."; return; }
+        echo "  [OK]   Image ready."
+
+        # ── Start container ───────────────────────────────────────────────────
+        # --network host: LAPI is on 127.0.0.1:8080 (local) or a routable address
+        #   (remote). Host networking makes both reachable without extra config.
+        #   As a side effect, the container's requests appear from 127.0.0.1,
+        #   which is in CrowdSec's default trusted_ips -- delete operations work
+        #   without any additional config.yaml changes.
+        # Port 3000 is already allowed from VPN subnets in nftables.
+        echo "  Starting $WEBUI_CONTAINER ..."
+        docker run -d \
+            --name "$WEBUI_CONTAINER" \
+            --restart unless-stopped \
+            --network host \
+            -e CROWDSEC_URL="$lapi_url" \
+            -e CROWDSEC_USER=crowdsec-web-ui \
+            -e CROWDSEC_PASSWORD="$WEBUI_PASS" \
+            -e CROWDSEC_LOOKBACK_PERIOD=7d \
+            -e CROWDSEC_REFRESH_INTERVAL=30s \
+            -v "$WEBUI_DATA:/app/data" \
+            ghcr.io/theduffman85/crowdsec-web-ui:latest \
+            || { echo "  ERROR: container failed to start."; echo "  Check: docker logs $WEBUI_CONTAINER"; return; }
+
+        # ── Health check ──────────────────────────────────────────────────────
+        echo "  Waiting for Web UI to become ready..."
+        local i=0
+        until curl -sf http://127.0.0.1:3000/api/health >/dev/null 2>&1; do
+            sleep 2; printf "."; i=$((i+1))
+            [ $i -ge 30 ] && {
+                echo ""
+                echo "  Health check timed out."
+                echo "    docker ps                         # confirm Up"
+                echo "    docker logs $WEBUI_CONTAINER      # check for errors"
+                echo "    curl http://127.0.0.1:3000/api/health"
+                return
+            }
+        done
+        echo " ready."
+        echo ""
+
+        local WG_SERVER_IP="${WG_NETWORK%.*}.1"
+        echo "  ╔══════════════════════════════════════════════════╗"
+        echo "  ║   Web UI is ready                                ║"
+        echo "  ╚══════════════════════════════════════════════════╝"
+        echo ""
+        echo "  Connect VPN then open in your browser:"
+        echo "       http://${WG_SERVER_IP}:3000    (via WireGuard)"
+        echo "       http://${TUNNEL_IP}:3000         (via iodine)"
+        echo ""
+        echo "  ── Container management ──────────────────────────────"
+        echo ""
+        echo "    docker stop  $WEBUI_CONTAINER"
+        echo "    docker start $WEBUI_CONTAINER"
+        echo "    docker logs  $WEBUI_CONTAINER"
+        echo "    docker rm -f $WEBUI_CONTAINER"
+        echo ""
+        echo "  ── Data persistence ──────────────────────────────────"
+        echo ""
+        echo "    Host path:  $WEBUI_DATA"
+        echo "    Database:   $WEBUI_DATA/crowdsec.db"
+        echo "    Alerts retained for 7 days (CROWDSEC_LOOKBACK_PERIOD)."
+        echo "    Data survives container restarts and reinstalls."
+        echo ""
+        echo "  ── Re-running this install replaces the machine password."
+        echo "     The container will be restarted with the new credentials."
+        echo ""
+    }
+
+    # ── action_install_dashboard ─────────────────────────────────────────────
+    # Entry point dispatched by the menu loop from 60_install_dashboard.sh.
+    # Presents a choice between the Grafana stack and the CrowdSec Web UI,
+    # then delegates to the appropriate helper function.
+    # Both use port 3000 -- only one can run at a time.
+    action_install_dashboard() {
+        clear
+        echo ""
+        echo "  ╔══════════════════════════════════════════════════╗"
+        echo "  ║   CrowdSec Dashboard -- Choose Your Stack        ║"
+        echo "  ╚══════════════════════════════════════════════════╝"
+        echo ""
+        echo "  Both options serve a dashboard on port 3000 (VPN-only)."
+        echo "  Only one can run at a time on the same port."
+        echo ""
+
+        # ── AVX check for Web UI ──────────────────────────────────────────────
+        # The crowdsec-web-ui container runs Bun, which requires AVX CPU
+        # instructions. Without AVX the Bun binary receives SIGILL (exit 132)
+        # on startup regardless of permissions, volumes, or configuration.
+        # This is a CPU feature check, not a kernel or Docker version check.
+        # VMs that do not expose host CPU flags to guests will fail this test
+        # even if the physical host has AVX capable hardware.
+        local _avx_ok="false"
+        grep -qw 'avx' /proc/cpuinfo 2>/dev/null && _avx_ok="true"
+
+        echo "  ── Option 1: Grafana + Prometheus ─────────────────────────────"
+        echo ""
+        echo "    Metrics-based. Pulls from CrowdSec's Prometheus endpoint."
+        echo "    Shows ban counts, parser rates, alert trends over time."
+        echo "    Three pre-built panels: Overview, Insight, Per-Machine."
+        echo "    No authentication built-in."
+        echo "    Works on all CPUs."
+        echo ""
+        echo "  ── Option 2: CrowdSec Web UI ───────────────────────────────────"
+        echo ""
+        echo "    React/Bun dashboard. Connects directly to the LAPI."
+        echo "    View and manage individual alerts and decisions."
+        echo "    Ban IPs manually. Filter by status. IP geolocation."
+        echo "    Lighter-weight -- no Prometheus or separate metrics stack."
+        echo "    No authentication built-in."
+        echo "    Source: https://github.com/TheDuffman85/crowdsec-web-ui"
+        echo ""
+        if [ "$_avx_ok" = "true" ]; then
+            echo "    CPU: AVX detected -- Web UI is compatible with this host."
+        else
+            echo "    CPU: AVX NOT detected -- Web UI CANNOT run on this host."
+            echo "    The Bun runtime requires AVX CPU instructions (Intel/AMD"
+            echo "    circa 2011+). This host either lacks AVX in hardware or"
+            echo "    is a VM on a CPU that predates AVX (e.g. AMD Phenom II,"
+            echo "    Intel Core 2). There is no software workaround."
+            echo "    Option 2 is disabled. Use Grafana instead."
+        fi
+        echo ""
+
+        if [ "$_avx_ok" = "true" ]; then
+            echo "    1)  Install Grafana + Prometheus"
+            echo "    2)  Install CrowdSec Web UI"
+            echo "    q)  Cancel"
+            echo ""
+            read -rp "  Choice: " _dash_ch || true
+            case "${_dash_ch:-q}" in
+                1) _install_grafana_dashboard ;;
+                2) _install_crowdsec_webui    ;;
+                *) echo "  Cancelled."; return ;;
+            esac
+        else
+            echo "    1)  Install Grafana + Prometheus"
+            echo "    q)  Cancel"
+            echo ""
+            read -rp "  Choice: " _dash_ch || true
+            case "${_dash_ch:-q}" in
+                1) _install_grafana_dashboard ;;
+                *) echo "  Cancelled."; return ;;
+            esac
+        fi
+    }
+
     clear
     echo ""
     echo "  ╔══════════════════════════════════════════════════╗"
@@ -1362,6 +1916,121 @@ show_install_menu() {
         *) INSTALL_WIREGUARD=true  ;;
     esac
 
+    if $INSTALL_WIREGUARD; then
+        echo ""
+        echo "  ── WireGuard tunnel port ────────────────────────────────────"
+        echo ""
+        echo "    1)  53    DNS port  (default)"
+        echo "    2)  123   NTP port"
+        echo "    3)  BOTH  one client config per port per peer"
+        echo ""
+
+        while true; do
+            read -rp "  Tunnel port [1/2/3, default 1]: " _wgport_ch
+            case "${_wgport_ch:-1}" in
+                1)
+                    WG_USE_PORT_53=true
+                    WG_USE_PORT_123=false
+                    break
+                    ;;
+                2|3)
+                    # ── Port 123 warning gate ─────────────────────────────
+                    # Inner loop: warning screen is redrawn on every iteration
+                    # so that invalid input (including bare Enter) never drops
+                    # the user back to the tunnel-port prompt without context.
+                    # 'back' breaks inner and falls through to redraw the port
+                    # menu before the outer loop re-reads _wgport_ch.
+                    # 'I understand' sets vars and breaks the outer loop.
+                    _p123_go_back=false
+                    while true; do
+                        clear
+                        echo ""
+                        echo "  ╔══════════════════════════════════════════════════════════╗"
+                        echo "  ║   !! WARNING: Port 123 (NTP) has severe limitations !!   ║"
+                        echo "  ╚══════════════════════════════════════════════════════════╝"
+                        echo ""
+                        echo "  Before selecting port 123, you must understand the following."
+                        echo ""
+                        echo "  ── What port 123 solves ─────────────────────────────────────"
+                        echo ""
+                        echo "    Port 53 is intercepted by carrier DNS proxies on some"
+                        echo "    cellular networks.  Port 123 (NTP) bypasses those proxies"
+                        echo "    because carriers do not redirect NTP traffic."
+                        echo ""
+                        echo "  ── What port 123 does NOT solve ─────────────────────────────"
+                        echo ""
+                        echo "    1. ISP RATE CAP (~50 Kbps / ~5 packets/sec)"
+                        echo ""
+                        echo "       Some carriers rate-limit ALL UDP/123 traffic to ~50 Kbps."
+                        echo "       This is a hard ceiling imposed upstream. Dial-up speed."
+                        echo "       WireGuard will connect but the experience will be:"
+                        echo "         - Web browsing: extremely slow"
+                        echo "         - Video/audio:  unusable"
+                        echo "         - SSH / text:   marginally usable"
+                        echo ""
+                        echo "       There is no server-side fix for this.  It is an ISP"
+                        echo "       policy enforced in their network, not yours."
+                        echo ""
+                        echo "    2. DPI FINGERPRINTING (payload inspection)"
+                        echo ""
+                        echo "       Carriers that do deep packet inspection check that"
+                        echo "       UDP/123 traffic matches NTP's fixed 48-byte payload."
+                        echo "       There is no server-side fix for DPI.  If this happens,"
+                        echo "       iodine (DNS tunnel) is your only fallback."
+                        echo ""
+                        echo "  ── Summary ──────────────────────────────────────────────────"
+                        echo ""
+                        echo "    Don't use NTP. Use iodine."
+                        echo ""
+                        echo "  ─────────────────────────────────────────────────────────────"
+                        echo ""
+                        echo "    Type  'I understand'  to proceed with port 123."
+                        echo "    Type  'back'          to return to port selection."
+                        echo ""
+                        read -rp "  > " _p123_confirm
+                        case "${_p123_confirm}" in
+                            "I understand"|"i understand")
+                                if [ "${_wgport_ch}" = "2" ]; then
+                                    WG_USE_PORT_53=false
+                                    WG_USE_PORT_123=true
+                                else
+                                    WG_USE_PORT_53=true
+                                    WG_USE_PORT_123=true
+                                fi
+                                clear
+                                break 2
+                                ;;
+                            back|Back|BACK)
+                                _p123_go_back=true
+                                break
+                                ;;
+                            *)
+                                echo ""
+                                echo "  Type 'I understand' to proceed, or 'back' to go back."
+                                read -rsp "  Press any key..." -n1
+                                echo ""
+                                ;;
+                        esac
+                    done
+                    # Redraw the port menu before the outer loop re-reads
+                    if $_p123_go_back; then
+                        clear
+                        echo ""
+                        echo "  ── WireGuard tunnel port ────────────────────────────────────"
+                        echo ""
+                        echo "    1)  53    DNS port  (default)"
+                        echo "    2)  123   NTP port"
+                        echo "    3)  BOTH  one client config per port per peer"
+                        echo ""
+                    fi
+                    ;;
+                *)
+                    echo "  Invalid choice."
+                    ;;
+            esac
+        done
+    fi
+
     echo ""
     echo "  ── CrowdSec ─────────────────────────────────────────────────"
     echo ""
@@ -1384,7 +2053,10 @@ show_install_menu() {
     echo ""
     echo "    Always:    nftables  iodine  CoreDNS  Docker"
     if $INSTALL_WIREGUARD; then
-        echo "    WireGuard: install locally"
+        local _port_desc="port 53 only"
+        $WG_USE_PORT_123 && ! $WG_USE_PORT_53 && _port_desc="port 123 only"
+        $WG_USE_PORT_53  && $WG_USE_PORT_123   && _port_desc="ports 53 + 123 (dual)"
+        echo "    WireGuard: install locally ($_port_desc)"
     else
         echo "    WireGuard: skip  (DNAT prerouting rule still written)"
     fi
@@ -1407,6 +2079,8 @@ show_install_menu() {
 # ── Component selection flags ─────────────────────────────────────────────────
 # Defaults; overwritten by show_install_menu() before any install work starts.
 INSTALL_WIREGUARD=true
+WG_USE_PORT_53=true    # expose WireGuard on UDP 53 (DNAT prerouting)
+WG_USE_PORT_123=false  # expose WireGuard on UDP 123 (NTP port bypass)
 INSTALL_CS=true
 CS_LAPI_MODE=local    # local | remote | none
 
@@ -1437,33 +2111,35 @@ cat << 'INTRO'
 :. ## ##::: ##:::::::: ##:. ###::::::::::'##::: ##:'##:::: ##:
 ::. ###:::: ##:::::::: ##::. ##::::::::::. ######::. #######::
 :::...:::::..:::::::::..::::..::::::::::::......::::.......:::
-   DNS TUNNEL + WIREGUARD VPN + CROWDSEC IPS  --  port 53
+   DNS TUNNEL + WIREGUARD VPN + CROWDSEC IPS  --  ports 53 / 123
 
   Architecture:
-    nftables (kernel)  -- inspects first 4 bytes of every UDP:53 packet
+    nftables (kernel)  -- inspects first 4 bytes of every UDP:53 and UDP:123 packet
       WireGuard bytes  -->  wg-quick on :51820  (kernel redirect, no proxy)
       DNS bytes        -->  CoreDNS on :53
     CoreDNS            -- tunnel domain --> iodined; everything else --> decoy
     iodined            -- iodine DNS tunnel on 127.0.0.1:5300
     wg-quick           -- WireGuard hub on :51820 (optional; see component menu)
     CrowdSec           -- IDS/IPS: DNS decoy sensor, SSH + port-scan detection
+                          port 123: non-WireGuard traffic is dropped
                           optional; local LAPI or remote LAPI mode
 
   Always installed:
     nftables firewall, iodine DNS tunnel, CoreDNS, Docker
 
   Optional (selected at component menu):
-    WireGuard VPN, CrowdSec IPS (local LAPI or remote LAPI)
+    WireGuard VPN -- port 53 only, port 123 only, or both
+      Port 53:  gets through most firewalls and captive portals
+      Port 123: NTP port, bypasses carrier DNS proxies ONLY
+                WARNING: some ISPs rate-cap UDP/123 to ~50 Kbps (dial-up speed)
+                probes on :123 detected via CROWDSEC_DROP + s02-enrich
+    CrowdSec IPS (local LAPI or remote LAPI)
 
   What you need before running:
     Two DNS records at your registrar:
       tunnel.yourdomain.com   IN NS   address.yourdomain.com
       address.yourdomain.com  IN A    <this server's public IP>
     DNS propagation takes up to 48 hours -- set these up first.
-
-    If using CrowdSec with remote LAPI, on the remote node first:
-      cscli machines add <this-node-name> --auto
-      cscli bouncers add <bouncer-name> -o raw
 
 INTRO
 
@@ -1704,8 +2380,11 @@ else
 fi
 echo ""
 if $INSTALL_WIREGUARD; then
-    echo "    WireGuard        : install locally"
-    echo "    WireGuard port   : $WG_PORT (internal; clients connect to port 53)"
+    _port_summary="port 53 only"
+    $WG_USE_PORT_123 && ! $WG_USE_PORT_53 && _port_summary="port 123 only"
+    $WG_USE_PORT_53  && $WG_USE_PORT_123   && _port_summary="ports 53 + 123 (dual)"
+    echo "    WireGuard        : install locally ($_port_summary)"
+    echo "    WireGuard int    : $WG_PORT (internal listen port, not externally open)"
     echo "    WireGuard subnet : $WG_NETWORK"
     echo "    WireGuard DNS    : $WG_DNS"
     echo "    WG clients       : $WG_CLIENTS_RAW"
@@ -1798,6 +2477,30 @@ COMPOSE_EOF
 # The CrowdSec table (ip crowdsec) is always written. If CrowdSec is not
 # installed, the set is empty and the chain accepts everything -- no overhead.
 # This also means nftables survives if CrowdSec is added later without a reload.
+
+# ── Build WireGuard prerouting rules ─────────────────────────────────────────
+# Always written regardless of INSTALL_WIREGUARD (harmless if no listener on
+# :51820; avoids regenerating nftables.conf if WireGuard is added later).
+# Port 53's rate limit is added post-hoc by CrowdSec step 2c (unchanged).
+_NFT_WG_PORT53_RULE=""
+if $WG_USE_PORT_53; then
+    _NFT_WG_PORT53_RULE="        # Redirect WireGuard packets arriving on port 53 to wg-quick on :51820.
+        # Matches all four WireGuard message types by the first 4 bytes of the
+        # UDP payload. conntrack records the DNAT so replies are rewritten back
+        # to source port 53 transparently.
+        udp dport 53 @th,64,32 { 0x01000000, 0x02000000, 0x03000000, 0x04000000 } redirect to :51820"
+fi
+_NFT_WG_PORT123_RULE=""
+if $WG_USE_PORT_123; then
+    _NFT_WG_PORT123_RULE="        # Redirect WireGuard packets arriving on port 123 to wg-quick on :51820.
+        # Non-WireGuard UDP:123 (NTP probes, scanners) fall through to the input
+        # chain where 'log prefix CROWDSEC_DROP' logs them for the ntp-probe-scanner
+        # scenario before the final drop.  No rate limit here: a prerouting cap
+        # would silently discard probes before CrowdSec can see them, and would
+        # introduce a shared token bucket that any non-WG packet could drain.
+        udp dport 123 @th,64,32 { 0x01000000, 0x02000000, 0x03000000, 0x04000000 } redirect to :51820"
+fi
+
 cat > "$GENDIR/nftables.conf" << NFTABLES_EOF
 #!/usr/sbin/nft -f
 # /etc/nftables.conf -- generated by VPN-over-port-53.sh
@@ -1809,11 +2512,8 @@ table ip iodine_nat {
 
     chain prerouting {
         type nat hook prerouting priority dstnat; policy accept;
-        # Redirect WireGuard packets arriving on port 53 to wg-quick on :51820.
-        # Matches all four WireGuard message types by the first 4 bytes of the
-        # UDP payload. conntrack records the DNAT so replies are rewritten back
-        # to source port 53 transparently.
-        udp dport 53 @th,64,32 { 0x01000000, 0x02000000, 0x03000000, 0x04000000 } redirect to :51820
+${_NFT_WG_PORT53_RULE}
+${_NFT_WG_PORT123_RULE}
     }
 
     chain postrouting {
@@ -1840,6 +2540,7 @@ table inet filter {
 
         # Management IP always gets SSH -- never rate-limited, never hit by bans.
         ip saddr ${MANAGEMENT_IP} tcp dport 22 accept
+        ip saddr { ${WG_NETWORK}, ${IODINE_NETWORK} } tcp dport 22 accept
 
         tcp dport 22 ct state new limit rate 5/minute accept
         tcp dport 22 drop
@@ -1848,12 +2549,16 @@ table inet filter {
         tcp flags & (fin|syn|rst|psh|ack|urg) == fin|syn|rst drop
         tcp flags & (fin|syn|rst|psh|ack|urg) == fin|rst drop
         tcp flags & (fin|syn|rst|psh|ack|urg) == 0x0 drop
+        ip saddr { ${WG_NETWORK}, ${IODINE_NETWORK} } tcp dport { 80, 443 } accept
         tcp dport { 80, 443 } ct state new limit rate over 25/second burst 50 packets drop
         tcp dport { 80, 443 } ct state new ct count over 100 drop
         tcp dport { 80, 443 } accept
 
         # Port 53: CoreDNS receives DNS; prerouting redirects WireGuard to :51820.
+        # Both VPN subnets bypass the rate limit step 2c injects before 'udp dport 53 accept'.
+        ip saddr { ${WG_NETWORK}, ${IODINE_NETWORK} } udp dport 53 accept
         udp dport 53 accept
+        ip saddr { ${WG_NETWORK}, ${IODINE_NETWORK} } tcp dport 53 accept
         tcp dport 53 ct state new limit rate over 2/minute drop
         tcp dport 53 accept
 
@@ -1863,6 +2568,7 @@ table inet filter {
         # Dashboard port 3000 (Grafana) and 9090 (Prometheus): VPN only.
         ip saddr { ${WG_NETWORK}, ${IODINE_NETWORK} } tcp dport { 3000, 9090 } accept
 
+        ip saddr { ${WG_NETWORK}, ${IODINE_NETWORK} } icmp type echo-request accept
         icmp type echo-request limit rate 5/second accept
         icmp type echo-request drop
 
@@ -1914,8 +2620,14 @@ NFTABLES_EOF
 
 # ── WireGuard seed files (only written when WireGuard is installed locally) ───
 if $INSTALL_WIREGUARD; then
+    # _WG_PORTNO is the external port written into client Endpoint fields via
+    # portno.txt. When both ports are active, 53 is primary; _ntp copies (port
+    # 123) are generated afterward by patching the Endpoint field.
+    _WG_PORTNO=53
+    $WG_USE_PORT_123 && ! $WG_USE_PORT_53 && _WG_PORTNO=123
+
     echo "${SERVER_IP}"    > "$GENDIR/wg/extnetip.txt"
-    echo "53"              > "$GENDIR/wg/portno.txt"
+    echo "${_WG_PORTNO}"   > "$GENDIR/wg/portno.txt"
     echo "${PUBLIC_IFACE}" > "$GENDIR/wg/extnetif.txt"
     echo "none"            > "$GENDIR/wg/sysctltype.txt"
     echo "none"            > "$GENDIR/wg/fwtype.txt"
@@ -1954,13 +2666,13 @@ if $INSTALL_WIREGUARD; then
         [ -f "$WG_WORKDIR/wghub.conf" ]                    || die "wghub.conf not found after generation"
         [ -f "$WG_WORKDIR/wgclient_${FIRST_CLIENT}.conf" ] || die "wgclient_${FIRST_CLIENT}.conf not found"
 
-        # Patch wghub.conf ListenPort: 53 (written by portno.txt) -> 51820.
-        grep -q "ListenPort = 53" "$WG_WORKDIR/wghub.conf" \
-            || die "wghub.conf does not have 'ListenPort = 53' -- portno.txt seed may have failed"
-        sed -i 's/^ListenPort = 53$/ListenPort = 51820/' "$WG_WORKDIR/wghub.conf"
+        # Patch wghub.conf ListenPort: _WG_PORTNO (written by portno.txt) -> 51820.
+        grep -q "ListenPort = ${_WG_PORTNO}" "$WG_WORKDIR/wghub.conf" \
+            || die "wghub.conf does not have 'ListenPort = ${_WG_PORTNO}' -- portno.txt seed may have failed"
+        sed -i "s/^ListenPort = ${_WG_PORTNO}$/ListenPort = 51820/" "$WG_WORKDIR/wghub.conf"
         grep -q "ListenPort = ${WG_PORT}" "$WG_WORKDIR/wghub.conf" \
             || die "wghub.conf ListenPort patch failed"
-        echo "  wghub.conf ListenPort patched: 53 -> ${WG_PORT}"
+        echo "  wghub.conf ListenPort patched: ${_WG_PORTNO} -> ${WG_PORT}"
     fi
 
     # ── Idempotency: client configs ───────────────────────────────────────────
@@ -1984,9 +2696,31 @@ if $INSTALL_WIREGUARD; then
     chmod 600 "$WG_WORKDIR"/*.conf
     echo "  All WireGuard configs ready."
 
+    # ── Port 123 (_ntp) client configs ───────────────────────────────────────
+    # When both ports are active, create a wgclient_<name>_ntp.conf for each
+    # client by patching the Endpoint port from the primary port to 123.
+    # These are never generated by easy-wg-quick -- always derived from primaries.
+    # Naming convention _ntp is intentional: descriptive, and the load_existing_config
+    # and build_and_show_menu functions explicitly skip/handle files with this suffix.
+    if $WG_USE_PORT_53 && $WG_USE_PORT_123; then
+        for raw_name in "${WG_CLIENT_NAMES[@]}"; do
+            name="$(echo "$raw_name" | tr -d '[:space:]')"
+            [ -z "$name" ] && continue
+            _ntp_dst="$WG_WORKDIR/wgclient_${name}_ntp.conf"
+            if [ -f "$_ntp_dst" ]; then
+                echo "  wgclient_${name}_ntp.conf exists -- skipping"
+            else
+                sed "s/Endpoint = ${SERVER_IP}:${_WG_PORTNO}/Endpoint = ${SERVER_IP}:123/" \
+                    "$WG_WORKDIR/wgclient_${name}.conf" > "$_ntp_dst"
+                chmod 600 "$_ntp_dst"
+                echo "  wgclient_${name}_ntp.conf created (Endpoint: ${SERVER_IP}:123)"
+            fi
+        done
+    fi
+
     SAMPLE_CONF="$WG_WORKDIR/wgclient_${FIRST_CLIENT}.conf"
-    if grep -q "Endpoint = ${SERVER_IP}:53" "$SAMPLE_CONF"; then
-        echo "  Client Endpoint = ${SERVER_IP}:53  [correct]"
+    if grep -q "Endpoint = ${SERVER_IP}:${_WG_PORTNO}" "$SAMPLE_CONF"; then
+        echo "  Client Endpoint = ${SERVER_IP}:${_WG_PORTNO}  [correct]"
     else
         ENDPOINT_FOUND="$(grep "Endpoint" "$SAMPLE_CONF" || echo "(not found)")"
         echo "  WARNING: unexpected client Endpoint: $ENDPOINT_FOUND"
@@ -2113,6 +2847,12 @@ nft list chain ip iodine_nat prerouting >/dev/null 2>&1 \
 nft list chain ip iodine_nat prerouting 2>/dev/null | grep -qE ':?51820' \
     && check_pass "nftables WireGuard redirect rule present" \
     || check_fail "nftables WireGuard redirect rule MISSING"
+if $WG_USE_PORT_123; then
+    nft list chain ip iodine_nat prerouting 2>/dev/null \
+        | grep -q 'udp dport 123' \
+        && check_pass "nftables port 123 (NTP) redirect rule present" \
+        || check_fail "nftables port 123 redirect rule MISSING"
+fi
 nft list table inet filter >/dev/null 2>&1 \
     && check_pass "nftables inet filter table" \
     || check_fail "nftables inet filter table missing"
@@ -2188,6 +2928,28 @@ else
     cscli hub update 2>/dev/null || true
 fi
 
+# ── Docker group access for crowdsec ─────────────────────────────────────────
+# CrowdSec reads CoreDNS logs via the Docker socket (docker:coredns source in
+# coredns-decoy.yaml). If crowdsec cannot access /var/run/docker.sock the
+# docker acquisition source silently reads zero lines -- no alerts fire.
+# CrowdSec runs as root on Debian but the socket is group:docker mode 660.
+# Adding crowdsec to the docker group ensures access survives future installs
+# that may drop root privileges.
+if getent group docker >/dev/null 2>&1; then
+    if ! id crowdsec >/dev/null 2>&1; then
+        # No dedicated crowdsec system user -- process runs as root, socket
+        # is accessible. Nothing to do.
+        echo "  [OK]   CrowdSec runs as root -- docker socket accessible"
+    elif id -nG crowdsec 2>/dev/null | grep -qw docker; then
+        echo "  [OK]   crowdsec already in docker group"
+    else
+        usermod -aG docker crowdsec
+        echo "  [OK]   crowdsec added to docker group (socket: /var/run/docker.sock)"
+    fi
+else
+    echo "  [WARN] docker group not found -- coredns acquisition may fail"
+fi
+
 # ── Step 2a: Security fix: drop iodine container privilege ───────────────────
 if grep -q 'privileged: true' /opt/iodine/docker-compose.yml; then
     sed -i '/^\s*privileged: true\s*$/d' /opt/iodine/docker-compose.yml
@@ -2207,6 +2969,11 @@ else
 fi
 
 # ── Step 2c: nftables UDP/53 rate limit + relax TCP/53 ───────────────────────
+# Port 53: the rate limit is added here (post-generation) because it needs to
+# land before 'udp dport 53 accept' in the input chain.
+# Port 123: the rate limit is baked into _NFT_WG_PORT123_RULE at generation
+# time (in prerouting, before DNAT fires) because port 123 has no accept rule
+# in the input chain -- it enters only via ct status dnat accept.
 if grep -q 'udp dport 53 limit rate' /etc/nftables.conf; then
     echo "  [OK]   nftables UDP/53 rate limit already present"
 else
@@ -2236,21 +3003,30 @@ labels:
 ACQUIS
 echo "  [OK]   Acquisition: /etc/crowdsec/acquis.d/coredns-decoy.yaml (docker source)"
 
+# sshd: Debian 12 uses journald-only -- /var/log/auth.log does not exist.
+# The crowdsec package auto-generates setup.sshd.yaml using journalctl.
+# Our custom sshd.yaml would override that with a broken file path.
+# Write a journalctl source instead to be explicit and survive re-installs.
 cat > /etc/crowdsec/acquis.d/sshd.yaml << 'ACQUIS'
-filenames:
-  - /var/log/auth.log
+source: journalctl
+journalctl_filter:
+  - "_SYSTEMD_UNIT=ssh.service"
 labels:
   type: syslog
 ACQUIS
-echo "  [OK]   Acquisition: /etc/crowdsec/acquis.d/sshd.yaml (auth.log)"
+echo "  [OK]   Acquisition: /etc/crowdsec/acquis.d/sshd.yaml (journalctl ssh)"
 
+# kernel: Debian 12 uses journald-only -- /var/log/kern.log does not exist.
+# _TRANSPORT=kernel captures all kernel messages including nftables LOG output
+# (CROWDSEC_DROP: prefix lines) needed for port-scan detection.
 cat > /etc/crowdsec/acquis.d/kernel.yaml << 'ACQUIS'
-filenames:
-  - /var/log/kern.log
+source: journalctl
+journalctl_filter:
+  - "_TRANSPORT=kernel"
 labels:
   type: syslog
 ACQUIS
-echo "  [OK]   Acquisition: /etc/crowdsec/acquis.d/kernel.yaml (kern.log)"
+echo "  [OK]   Acquisition: /etc/crowdsec/acquis.d/kernel.yaml (journalctl kernel)"
 
 # ── Step 2e: Write custom CoreDNS parser ─────────────────────────────────────
 mkdir -p /etc/crowdsec/parsers/s01-parse
@@ -2314,6 +3090,63 @@ labels:
   remediation: true
 SCENARIO
 echo "  [OK]   Scenario: dns-decoy-scanner.yaml"
+
+# ── Step 2h: Port 123 probe detection via s02-enrich (port 123 only) ─────────
+# When WireGuard uses port 123, non-WireGuard UDP:123 packets are NOT DNAT'd.
+# They reach the input chain, are dropped, and the 'log prefix "CROWDSEC_DROP: "'
+# rule writes them to kern.log. kern.log is already acquired as type:syslog.
+#
+# Pipeline:
+#   kern.log → crowdsecurity/syslog-logs (s00-raw, sets evt.Parsed.message)
+#           → crowdsecurity/iptables-logs (s01-parse, extracts SRC/DPT,
+#               sets evt.Meta.source_ip, onsuccess:next_stage → promotes to s02-enrich)
+#           → custom/ntp-probe-enrich (s02-enrich, filters on DPT=123 in
+#               the CROWDSEC_DROP line, sets log_type=ntp_probe)
+#           → ntp-probe-scanner scenario → ban decision → bouncer → DROP
+#
+# The parser lives in s02-enrich (NOT s01-parse) because iptables-logs in
+# s01-parse already consumed and promoted these events. evt.Meta.source_ip is
+# already set by iptables-logs so this parser only needs to tag the event.
+# No dedicated LOG rule needed -- CROWDSEC_DROP already logs everything.
+# No NTP server needed -- it couldn't bind port 123 anyway since WireGuard
+# DNAT redirects from it at the prerouting level.
+if $WG_USE_PORT_123; then
+    mkdir -p /etc/crowdsec/parsers/s02-enrich
+    cat > /etc/crowdsec/parsers/s02-enrich/ntp-probe-enrich.yaml << 'PARSER'
+name: custom/ntp-probe-enrich
+description: >
+  Tag nftables CROWDSEC_DROP events on DPT=123 as NTP probes.
+  Runs in s02-enrich because iptables-logs in s01-parse already consumed
+  these kernel log lines and promoted them here via onsuccess:next_stage.
+  evt.Meta.source_ip is already populated by iptables-logs.
+  Uses evt.Line.Raw which is always available; evt.Parsed.message is not
+  reliably set in s02-enrich context and causes a nil dereference crash.
+filter: "evt.Line.Raw contains 'CROWDSEC_DROP:' && evt.Line.Raw contains 'DPT=123'"
+nodes:
+  - statics:
+      - meta: log_type
+        value: ntp_probe
+PARSER
+    echo "  [OK]   Parser: s02-enrich/ntp-probe-enrich.yaml"
+
+    cat > /etc/crowdsec/scenarios/ntp-probe-scanner.yaml << 'SCENARIO'
+name: custom/ntp-probe-scanner
+description: >
+  External IP probing UDP port 123. This server does not run an NTP
+  service -- any non-WireGuard packet on port 123 is a probe or scan.
+type: leaky
+filter: "evt.Meta.log_type == 'ntp_probe'"
+leakspeed: "20s"
+capacity: 3
+groupby: evt.Meta.source_ip
+blackhole: 2m
+labels:
+  service: ntp
+  type: decoy_probe
+  remediation: true
+SCENARIO
+    echo "  [OK]   Scenario: ntp-probe-scanner.yaml"
+fi  # WG_USE_PORT_123
 
 # ── Remote LAPI: configure agent to use remote LAPI before first start ────────
 # These steps only apply when CS_LAPI_MODE=remote. For local mode, the default
@@ -2517,6 +3350,19 @@ echo "  Reloading nftables (conntrack NOT flushed -- intentional)..."
 systemctl restart nftables
 echo "  [OK]   nftables reloaded"
 
+# CrowdSec adds a hook at priority -1 (crowdsec_chain) that did not exist when
+# wg-quick started.  Stale conntrack DNAT entries created before that hook was
+# registered no longer match the reverse-DNAT path correctly, so wg-quick's
+# response rewrite (src :51820 -> :53) silently fails.  Flush conntrack and
+# restart wg-quick so all entries are created against the final hook ordering.
+# This flush is safe here: it is a fresh install path with no live clients yet.
+if $INSTALL_WIREGUARD; then
+    conntrack -F 2>/dev/null || true
+    systemctl restart wg-quick@wghub \
+        || die "wg-quick restart after CrowdSec hook install failed"
+    echo "  [OK]   conntrack flushed + wg-quick restarted (post CrowdSec hook)"
+fi
+
 # Restart bouncer immediately after nftables reload to re-apply all current bans.
 echo "  Restarting bouncer after nftables reload (re-applies all active bans)..."
 systemctl restart crowdsec-firewall-bouncer
@@ -2579,6 +3425,15 @@ cscli parsers list 2>/dev/null | grep -q 'coredns-decoy-logs' \
     && cs_ok  "CoreDNS parser loaded"             || cs_fail "CoreDNS parser NOT loaded"
 grep -q 'apply_on: message' /etc/crowdsec/parsers/s01-parse/coredns-decoy-logs.yaml \
     && cs_ok  "Parser apply_on correct"           || cs_fail "Parser apply_on wrong -- must be message"
+
+if $WG_USE_PORT_123; then
+    cscli parsers list 2>/dev/null | grep -q 'ntp-probe-enrich' \
+        && cs_ok  "Port 123 probe enricher loaded (s02-enrich)" \
+        || cs_fail "Port 123 probe enricher NOT loaded -- probes on :123 won't trigger scenario"
+    cscli scenarios list 2>/dev/null | grep -q 'ntp-probe-scanner' \
+        && cs_ok  "Port 123 probe scenario loaded" \
+        || cs_fail "Port 123 probe scenario NOT loaded"
+fi
 
 echo ""
 echo "  ── CrowdSec: Passed: $CS_PASS   Failed: $CS_FAIL ──"
