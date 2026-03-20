@@ -170,5 +170,5 @@ Sure, test it now:
 
 ## Part 4: XRAY V2Ray HTTP Proxy Tunneling
 
-That's right! There is an alternative! W can move on to the [4_xray_dpi_website](../4_xray_dpi_website) example.
+That's right! There is an alternative! W can move on to the [`4_hidden-vpn-that-looks-like-a-website`](./../../../../hidden-vpn-that-looks-like-a-website) example.
 
