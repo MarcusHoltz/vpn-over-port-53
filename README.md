@@ -9,7 +9,7 @@ Several folders, each demonstrating part of the final script. The write-up that 
 
 * * *
 
-![DNS Request escapes the local network by using iodine as WireGuard sits flying above](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--opnsense-caddy-dns-vpn-crowdsec-support.jpg "DNS Request Escape with Iodine or Wireguard")
+![DNS Request escapes the local network by using iodine as WireGuard sits flying above and Crowdsec llama bouncers are watching the whole thing](https://raw.githubusercontent.com/MarcusHoltz/marcusholtz.github.io/refs/heads/main/assets/img/header/header--network--vpn-over-port53-crowdsec-dns-decoy.jpg "DNS Request Escape with Iodine or Wireguard while Crowdsec watches everything")
 
 * * *
 
