@@ -459,19 +459,19 @@ SECTION
                 echo "    Import tunnel from file: $conf"
                 echo ""
                 echo "  ┌─────────────────────────────────────────────────────────┐"
-                echo "  │  ⚠  CELLULAR WARNING   ⚠   ⚠   ⚠   ⚠   ⚠   ⚠                   │"
-                echo "  │                                                              │"
-                echo "  │  WireGuard is ontop of UDP port 53. Most cell phone          │"
-                echo "  │  carriers (Verizon,etc) run a transparent DNS proxy          │"
-                echo "  │  ontop of your communications that intercepts UDP/53         │"
-                echo "  │  This corrupts UDP :53 traffic that is not real DNS.         │"
-                echo "  │                                                              │"
-                echo "  │  Symptom: works on WiFi, fails on cellular.                  │"
-                echo "  │  Fix: get off the cell network, or use iodine                │"
-                echo "  │                                                              │"
-                echo "  │  Android: iodine alone is your tunnel on cellular.           │"
-                echo "  │                                                              │"
-                echo "  │  See 'cellular warning' in this menu for full details.       │"
+                echo "  │  ⚠  CELLULAR WARNING   ⚠   ⚠   ⚠   ⚠   ⚠   ⚠                │"
+                echo "  │                                                         │"
+                echo "  │  WireGuard is ontop of UDP port 53. Most cell phone     │"
+                echo "  │  carriers (Verizon,etc) run a transparent DNS proxy     │"
+                echo "  │  ontop of your communications that intercepts UDP/53    │"
+                echo "  │  This corrupts UDP :53 traffic that is not real DNS.    │"
+                echo "  │                                                         │"
+                echo "  │  Symptom: works on WiFi, fails on cellular.             │"
+                echo "  │  Fix: get off the cell network, or use iodine           │"
+                echo "  │                                                         │"
+                echo "  │  Android: iodine alone is your tunnel on cellular.      │"
+                echo "  │                                                         │"
+                echo "  │  See 'cellular warning' in this menu for full details.  │"
                 echo "  └─────────────────────────────────────────────────────────┘"
             } > "$OUTFILE"
 
@@ -1137,19 +1137,19 @@ SECTION
             echo "    Import tunnel from file: $newconf"
             echo ""
             echo "  ┌─────────────────────────────────────────────────────────┐"
-            echo "  │  ⚠  CELLULAR WARNING   ⚠   ⚠   ⚠   ⚠   ⚠   ⚠                  │"
-            echo "  │                                                              │"
-            echo "  │  WireGuard is ontop of UDP port 53. Most cell phone          │"
-            echo "  │  carriers (Verizon,etc) run a transparent DNS proxy          │"
-            echo "  │  ontop of your communications that intercepts UDP/53         │"
-            echo "  │  This corrupts UDP :53 traffic that is not real DNS.         │"
-            echo "  │                                                              │"
-            echo "  │  Symptom: works on WiFi, fails on cellular.                  │"
-            echo "  │  Fix: get off the cell network, or use iodine                │"
-            echo "  │                                                              │"
-            echo "  │  Android: iodine alone is your tunnel on cellular.           │"
-            echo "  │                                                              │"
-            echo "  │  See 'cellular warning' in this menu for full details.       │"
+            echo "  │  ⚠  CELLULAR WARNING   ⚠   ⚠   ⚠   ⚠   ⚠   ⚠               │"
+            echo "  │                                                         │"
+            echo "  │  WireGuard is ontop of UDP port 53. Most cell phone     │"
+            echo "  │  carriers (Verizon,etc) run a transparent DNS proxy     │"
+            echo "  │  ontop of your communications that intercepts UDP/53    │"
+            echo "  │  This corrupts UDP :53 traffic that is not real DNS.    │"
+            echo "  │                                                         │"
+            echo "  │  Symptom: works on WiFi, fails on cellular.             │"
+            echo "  │  Fix: get off the cell network, or use iodine           │"
+            echo "  │                                                         │"
+            echo "  │  Android: iodine alone is your tunnel on cellular.      │"
+            echo "  │                                                         │"
+            echo "  │  See 'cellular warning' in this menu for full details   │"
             echo "  └─────────────────────────────────────────────────────────┘"
         } > "$newfile"
         CLIENT_IDX=$((CLIENT_IDX + 1))
@@ -1307,7 +1307,7 @@ SECTION
 
         echo ""
         echo "  ╔══════════════════════════════════════════════════╗"
-        echo "  ║   CrowdSec Grafana Dashboard -- Local Install         ║"
+        echo "  ║   CrowdSec Grafana Dashboard -- Local Install    ║"
         echo "  ╚══════════════════════════════════════════════════╝"
         echo ""
         echo "  Stack:"
@@ -1522,7 +1522,7 @@ ENDYAML
 
         echo ""
         echo "  ╔══════════════════════════════════════════════════╗"
-        echo "  ║   Stack is ready                                      ║"
+        echo "  ║   Stack is ready                                 ║"
         echo "  ╚══════════════════════════════════════════════════╝"
         echo ""
         echo "  Connect VPN then open in your browser:"
@@ -1557,7 +1557,7 @@ ENDYAML
 
         echo ""
         echo "  ╔══════════════════════════════════════════════════╗"
-        echo "  ║   CrowdSec Web UI -- Local Install                    ║"
+        echo "  ║   CrowdSec Web UI -- Local Install               ║"
         echo "  ╚══════════════════════════════════════════════════╝"
         echo ""
         echo "  A modern React/Bun dashboard for CrowdSec."
@@ -1741,7 +1741,7 @@ ENDYAML
 
         local WG_SERVER_IP="${WG_NETWORK%.*}.1"
         echo "  ╔══════════════════════════════════════════════════╗"
-        echo "  ║   Web UI is ready                                     ║"
+        echo "  ║   Web UI is ready                                ║"
         echo "  ╚══════════════════════════════════════════════════╝"
         echo ""
         echo "  Connect VPN then open in your browser:"
@@ -1776,7 +1776,7 @@ ENDYAML
         clear
         echo ""
         echo "  ╔══════════════════════════════════════════════════╗"
-        echo "  ║   CrowdSec Dashboard -- Choose Your Stack             ║"
+        echo "  ║   CrowdSec Dashboard -- Choose Your Stack        ║"
         echo "  ╚══════════════════════════════════════════════════╝"
         echo ""
         echo "  Both options serve a dashboard on port 3000 (VPN-only)."
@@ -1848,7 +1848,7 @@ ENDYAML
     clear
     echo ""
     echo "  ╔══════════════════════════════════════════════════╗"
-    echo "  ║   DNS Tunnel + WireGuard  --  Setup Complete          ║"
+    echo "  ║   DNS Tunnel + WireGuard  --  Setup Complete     ║"
     echo "  ╚══════════════════════════════════════════════════╝"
     echo ""
     echo "  Use the menu below to view connection info, QR codes,"
@@ -1928,7 +1928,7 @@ show_install_menu() {
     clear
     echo ""
     echo "  ╔══════════════════════════════════════════════════════════╗"
-    echo "  ║   Component Selection                                         ║"
+    echo "  ║   Component Selection                                    ║"
     echo "  ╚══════════════════════════════════════════════════════════╝"
     echo ""
     echo "  Always installed:  nftables  iodine  CoreDNS  Docker"
@@ -1975,7 +1975,7 @@ show_install_menu() {
                         clear
                         echo ""
                         echo "  ╔══════════════════════════════════════════════════════════╗"
-                        echo "  ║   !! WARNING: Port 123 (NTP) has severe limitations !!        ║"
+                        echo "  ║   !! WARNING: Port 123 (NTP) has severe limitations !!   ║"
                         echo "  ╚══════════════════════════════════════════════════════════╝"
                         echo ""
                         echo "  Before selecting port 123, you must understand the following."
@@ -2187,8 +2187,8 @@ if [ -f /opt/iodine/docker-compose.yml ]; then
     clear
     echo ""
     echo "  ╔══════════════════════════════════════════════════╗"
-    echo "  ║   Existing installation detected                      ║"
-    echo "  ║   /opt/iodine/docker-compose.yml exists               ║"
+    echo "  ║   Existing installation detected                 ║"
+    echo "  ║   /opt/iodine/docker-compose.yml exists          ║"
     echo "  ╚══════════════════════════════════════════════════╝"
     echo ""
     echo "  What would you like to do?"
@@ -2463,17 +2463,38 @@ mkdir -p "$GENDIR/iodine" "$GENDIR/wg"
 # resolver directly (e.g. 45.11.45.11); this works because the nftables
 # masquerade rule already NATs iodine subnet traffic to the internet.
 cat > "$GENDIR/iodine/Corefile" << COREFILE_EOF
+# ── iodine tunnel zone ────────────────────────────────────────────────────────
+# Forwards iodine handshake protocol to iodined on :5300.
 ${IODINE_DOMAIN} {
+    errors          # NIST SP 800-81r3 §2.1.3 -- log forwarding failures for DFIR
+    cache 30        # NIST SP 800-81r3 §2.3.2 -- reduce upstream load; improves resiliency
     forward . 127.0.0.1:5300
 }
 
+# ── decoy catch-all zone ──────────────────────────────────────────────────────
+# Presents as a plausible-but-broken public resolver to confuse scanners.
+# All legitimate traffic (WireGuard / iodine) bypasses this block entirely.
 . {
+    errors          # NIST SP 800-81r3 §2.1.3 -- surface protocol errors to logs for DFIR correlation
     log
     acl {
-        block type ANY
+        block type ANY    # NIST SP 800-81r3 §4.2.4 -- ANY queries are a DNS amplification vector
+        block type TXT    # NIST SP 800-81r3 §4.2.4 -- TXT is the primary DNS data-exfiltration channel; §3.5.1 -- minimise information leakage
+        block type NAPTR  # NIST SP 800-81r3 §3.5.1 -- NAPTR reveals service topology; exclude from internet-facing zones
+        block type SRV    # NIST SP 800-81r3 §3.5.1 -- SRV reveals service topology; exclude from internet-facing zones
     }
+    # A queries return the decoy address.
+    # NIST SP 800-81r3 §3.7.1 -- TTL must be in the 1800-86400 range; 3600 replaces
+    # the previous TTL of 60 which fell below the minimum recommended value.
+    template IN A {
+        answer "{{ .Name }} 3600 IN A 93.184.216.34"
+    }
+    # All other query types (AAAA, MX, NS, SOA, CNAME, PTR ...) return SERVFAIL.
+    # NIST SP 800-81r3 §3.5.1 -- internet-facing zones must not expose MX, NS, SOA,
+    # or other informational record types. SERVFAIL is a minimal, non-amplifiable
+    # response and prevents the decoy from leaking authoritative-looking records.
     template IN ANY {
-        answer "{{ .Name }} 60 IN A 93.184.216.34"
+        rcode SERVFAIL
     }
 }
 COREFILE_EOF
@@ -3096,6 +3117,10 @@ nodes:
         expression: evt.Parsed.dns_qname
       - meta: dns_rcode
         expression: evt.Parsed.dns_rcode
+      # NIST SP 800-81r3 §4.2.4 -- export query type so scenarios can detect TXT/NULL
+      # tunneling and other exfiltration-indicative record types.
+      - meta: dns_type
+        expression: evt.Parsed.dns_type
 PARSER
 echo "  [OK]   Parser: coredns-decoy-logs.yaml"
 
@@ -3126,15 +3151,59 @@ description: >
 type: leaky
 filter: "evt.Meta.log_type == 'coredns_decoy_query' && !(evt.Meta.dns_qname contains '${IODINE_DOMAIN}')"
 leakspeed: "20s"
-capacity: 3
+# NIST SP 800-81r3 §2.1.2 -- protective DNS acts as a policy enforcement point
+# blocking harmful traffic at the point of name resolution. capacity: 2 because
+# this server has never advertised itself as a public resolver; a second query
+# from the same external IP constitutes confirmed reconnaissance.
+capacity: 2
 groupby: evt.Meta.source_ip
-blackhole: 2m
+# NIST SP 800-81r3 §2.1.2 -- extended to 5 minutes to meaningfully interrupt
+# automated scanning tools that retry on short bans.
+blackhole: 5m
 labels:
   service: dns
   type: decoy_probe
   remediation: true
 SCENARIO
 echo "  [OK]   Scenario: dns-decoy-scanner.yaml"
+
+# ── Step 2g-2: DNS tunneling / exfiltration scenario ─────────────────────────
+# NIST SP 800-81r3 §4.2.4 -- Detecting and Mitigating Data Exfiltration via DNS.
+# The document lists three primary indicators; this scenario targets two of them:
+#   • Queries for TXT/NULL record types  (most common DNS-tunneling transport)
+#   • Queries with high-entropy QNAMEs  (base32/base64-encoded tunnel payloads)
+# The third indicator (large query volume from one host) is already handled by
+# the dns-decoy-scanner leaky-bucket scenario above.
+#
+# CoreDNS blocks TXT/NULL at the ACL layer (REFUSED) but logs them first because
+# the log plugin runs before acl in the Corefile -- CrowdSec sees every blocked
+# query.  type: trigger means no grace period: a single matching query from an
+# external IP is sufficient evidence of tunneling reconnaissance.
+cat > /etc/crowdsec/scenarios/dns-tunnel-probe.yaml << SCENARIO
+name: custom/dns-tunnel-probe
+description: >
+  DNS tunneling or exfiltration probe detected on the decoy zone.
+  Triggers immediately on TXT/NULL queries or high-entropy QNAMEs.
+  NIST SP 800-81r3 §4.2.4 -- Detecting and Mitigating Data Exfiltration via DNS.
+# NIST SP 800-81r3 §4.2.4 -- type: trigger (instant ban, no leaky bucket) because
+# TXT/NULL queries to a server with no advertised services have no benign
+# interpretation; high-entropy labels (>50 chars) indicate base32/base64 payloads.
+type: trigger
+filter: >
+  evt.Meta.log_type == 'coredns_decoy_query'
+  && !(evt.Meta.dns_qname contains '${IODINE_DOMAIN}')
+  && (
+       evt.Meta.dns_type in ['TXT', 'NULL']
+       || len(evt.Meta.dns_qname) > 50
+     )
+groupby: evt.Meta.source_ip
+blackhole: 30m
+labels:
+  service: dns
+  type: dns_tunnel_probe
+  remediation: true
+SCENARIO
+echo "  [OK]   Scenario: dns-tunnel-probe.yaml"
 
 # ── Step 2h: Port 123 probe detection via s02-enrich (port 123 only) ─────────
 # When WireGuard uses port 123, non-WireGuard UDP:123 packets are NOT DNAT'd.
@@ -3462,6 +3531,8 @@ grep -q 'udp dport 53 limit rate' /etc/nftables.conf \
     && cs_ok  "nftables UDP/53 rate limit"        || cs_fail "nftables UDP/53 rate limit MISSING"
 cscli scenarios list 2>/dev/null | grep -q 'dns-decoy-scanner' \
     && cs_ok  "DNS decoy scenario loaded"         || cs_fail "DNS decoy scenario NOT loaded"
+cscli scenarios list 2>/dev/null | grep -q 'dns-tunnel-probe' \
+    && cs_ok  "DNS tunnel-probe scenario loaded"  || cs_fail "DNS tunnel-probe scenario NOT loaded"
 [ -f /etc/crowdsec/acquis.d/coredns-decoy.yaml ] \
     && cs_ok  "CrowdSec acquisition config"       || cs_fail "Acquisition config MISSING"
 grep -q 'source: docker' /etc/crowdsec/acquis.d/coredns-decoy.yaml \
@@ -3516,6 +3587,10 @@ echo "  Zero-tolerance mode (ban on first probe, no grace period):"
 echo "    Edit /etc/crowdsec/scenarios/dns-decoy-scanner.yaml"
 echo "    Set: type: trigger  (remove leakspeed and capacity lines)"
 echo "    sudo systemctl restart crowdsec"
+echo ""
+echo "  DNS tunnel/exfiltration detection (already type: trigger -- instant ban):"
+echo "    /etc/crowdsec/scenarios/dns-tunnel-probe.yaml"
+echo "    sudo cscli alerts list --scenario custom/dns-tunnel-probe"
 echo ""
 echo "  Optional local Grafana dashboard:"
 echo "    Select 'install dashboard' from the Setup Complete menu."
