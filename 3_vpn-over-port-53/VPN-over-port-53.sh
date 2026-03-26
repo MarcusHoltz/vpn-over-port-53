@@ -2467,7 +2467,6 @@ cat > "$GENDIR/iodine/Corefile" << COREFILE_EOF
 # Forwards iodine handshake protocol to iodined on :5300.
 ${IODINE_DOMAIN} {
     errors          # NIST SP 800-81r3 §2.1.3 -- log forwarding failures for DFIR
-    cache 30        # NIST SP 800-81r3 §2.3.2 -- reduce upstream load; improves resiliency
     forward . 127.0.0.1:5300
 }
 
